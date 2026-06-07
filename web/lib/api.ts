@@ -186,6 +186,82 @@ export type SecretRecord = {
   updated_at: string;
 };
 
+export interface CompanyProfile {
+  id: number;
+  workspace_id: number;
+  name: string;
+  website_url: string | null;
+  description: string | null;
+  category: string | null;
+  target_audience: string | null;
+  geography: string | null;
+  language: string;
+  features: string | null;
+  benefits: string | null;
+  pain_points: string | null;
+  competitors: string | null;
+  brand_voice: string | null;
+  preferred_cta: string | null;
+  extracted_summary: string | null;
+  extracted_keywords: string | null;
+  extracted_pain_points: string | null;
+  extracted_competitors: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BrandKeyword {
+  id: number;
+  company_id: number;
+  keyword: string;
+  type: string;
+  weight: number;
+  source: string | null;
+  times_matched: number;
+  times_approved: number;
+  times_rejected: number;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Source {
+  id: number;
+  company_id: number;
+  platform: string;
+  source_name: string;
+  source_url: string | null;
+  status: string;
+  priority: number;
+  config_json: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentRun {
+  id: number;
+  company_id: number;
+  agent_name: string;
+  started_at: string;
+  finished_at: string | null;
+  status: string;
+  items_fetched: number;
+  items_kept: number;
+  items_rejected: number;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface Feedback {
+  id: number;
+  opportunity_id: number;
+  company_id: number;
+  action: string;
+  reason: string | null;
+  created_at: string;
+}
+
 // ── Base helpers ────────────────────────────────────────────────
 
 export function isAuthError(error: unknown): boolean {

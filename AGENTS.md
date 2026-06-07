@@ -362,6 +362,40 @@ def create_entity_endpoint(
 
 ---
 
+## Multi-Agent Platform (Added 2026-06)
+
+### New Services
+- `app/services/agents/` — All agent implementations
+- `app/services/product/brand_brain.py` — Website analysis and intelligence extraction
+- `app/services/product/keyword_expansion.py` — Keyword universe generation
+- `app/services/product/relevance_v2.py` — Composite relevance scoring engine
+- `app/services/product/intent_classifier.py` — Heuristic intent classification
+- `app/services/infrastructure/embeddings/` — Local embedding service (TF-IDF + optional sentence-transformers)
+- `app/services/infrastructure/scheduler/` — Agent scheduler and orchestration
+- `app/services/product/feedback_loop.py` — Learning from user feedback
+
+### New Routes
+- `/v1/company/*` — Company profile and Brand Brain
+- `/v1/sources/*` — Source management
+- `/v1/agents/*` — Agent runs and scheduling
+- `/v1/feed/*` — Central opportunity feed
+- `/v1/seo/*` — SEO agent
+- `/v1/geo/*` — GEO agent
+- `/v1/articles/*` — Articles agent
+- `/v1/ugc/*` — UGC brief agent
+- `/v1/technical-seo/*` — Technical SEO agent
+- `/v1/manual-import/*` — X/LinkedIn manual import
+- `/v1/analytics/v2/*` — Enhanced analytics
+- `/v1/feedback/*` — Feedback submission
+
+### New Frontend Pages
+- `/app/company` — Company setup
+- `/app/brand-brain` — Brand intelligence and keyword universe
+- `/app/agents` — Central opportunity feed
+- `/app/agent-runs` — Agent run logs and controls
+- `/app/seo-geo` — SEO audit and GEO visibility
+- `/app/content-studio` — Article briefs, X posts, LinkedIn posts, UGC briefs
+
 ## Critical Reference Files
 
 **Study these for correct patterns:**

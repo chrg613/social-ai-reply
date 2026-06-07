@@ -1,4 +1,13 @@
-"""LLM provider registry and factory functions."""
+"""LLM provider registry and factory functions.
+
+Supported providers:
+- gemini (primary / default)
+- openai (optional, supports custom base_url)
+- perplexity (optional)
+- claude (optional)
+- ollama (auto-detected when OLLAMA_BASE_URL is configured)
+- template (always available, no API key required)
+"""
 
 from __future__ import annotations
 

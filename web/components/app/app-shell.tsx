@@ -82,33 +82,34 @@ const NAV_SECTIONS = [
     items: [
       { href: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/app/analytics", label: "Analytics", icon: BarChart2 },
-      { href: "/app/auto-pipeline", label: "Auto Pipeline", icon: Workflow, badge: true },
+      { href: "/app/agent-runs", label: "Agent Runs", icon: Workflow },
     ],
   },
   {
-    title: "MONITOR",
-    icon: Eye,
+    title: "INTELLIGENCE",
+    icon: Search,
     items: [
-      { href: "/app/visibility", label: "AI Visibility", icon: Eye },
-      { href: "/app/sources", label: "Source Intel", icon: Search },
+      { href: "/app/company", label: "Company Setup", icon: UserCircle },
+      { href: "/app/brand-brain", label: "Brand Brain", icon: Palette },
+      { href: "/app/sources", label: "Sources", icon: Search },
     ],
   },
   {
-    title: "ENGAGE",
+    title: "OPPORTUNITIES",
     icon: Radar,
     items: [
-      { href: "/app/discovery", label: "Opportunity Radar", icon: Radar },
+      { href: "/app/agents", label: "Agents Feed", icon: Radar },
+      { href: "/app/discovery", label: "Reddit Radar", icon: Radar },
       { href: "/app/content", label: "Content Studio", icon: FileText },
-      { href: "/app/subreddits", label: "Communities", icon: Users },
+      { href: "/app/content-studio", label: "Content Studio (New)", icon: FileText },
     ],
   },
   {
-    title: "CONFIGURE",
-    icon: Settings,
+    title: "OPTIMIZE",
+    icon: Eye,
     items: [
-      { href: "/app/brand", label: "Brand Profile", icon: Palette },
-      { href: "/app/persona", label: "Personas", icon: UserCircle },
-      { href: "/app/prompts", label: "Prompts", icon: Terminal },
+      { href: "/app/seo-geo", label: "SEO / GEO", icon: Eye },
+      { href: "/app/visibility", label: "AI Visibility", icon: Eye },
     ],
   },
   {
@@ -123,16 +124,22 @@ const NAV_SECTIONS = [
 const PATH_TITLES: Record<string, string> = {
   "/app/dashboard": "Dashboard",
   "/app/auto-pipeline": "Overview / Auto Pipeline",
-  "/app/visibility": "Monitor / AI Visibility",
-  "/app/sources": "Monitor / Source Intel",
-  "/app/discovery": "Engage / Opportunity Radar",
-  "/app/content": "Engage / Content Studio",
+  "/app/agent-runs": "Overview / Agent Runs",
+  "/app/analytics": "Overview / Analytics",
+  "/app/company": "Intelligence / Company Setup",
+  "/app/brand-brain": "Intelligence / Brand Brain",
+  "/app/sources": "Intelligence / Sources",
+  "/app/agents": "Opportunities / Agents Feed",
+  "/app/discovery": "Opportunities / Reddit Radar",
+  "/app/content": "Opportunities / Content Studio",
+  "/app/content-studio": "Opportunities / Content Studio (New)",
   "/app/subreddits": "Engage / Communities",
   "/app/brand": "Configure / Brand Profile",
   "/app/persona": "Configure / Personas",
   "/app/prompts": "Configure / Prompts",
+  "/app/seo-geo": "Optimize / SEO / GEO",
+  "/app/visibility": "Optimize / AI Visibility",
   "/app/settings": "Settings",
-  "/app/analytics": "Overview / Analytics",
 };
 
 /** Group notifications into Today / Yesterday / Older buckets. */
@@ -629,9 +636,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
                               isActive && "text-primary"
                             )} />
                             <span className="flex-1 truncate">{item.label}</span>
-                            {item.badge && (
-                              <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                            )}
                           </Link>
                         );
                       })}

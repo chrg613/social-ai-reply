@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.constants.app import (
@@ -89,6 +89,15 @@ class Settings(BaseSettings):
     # Anthropic / Claude (optional alternative)
     anthropic_api_key: str | None = None
     anthropic_model: str = DEFAULT_ANTHROPIC_MODEL
+
+    # Ollama (optional local LLM)
+    ollama_base_url: str | None = None
+    local_llm_model: str = "llama3.1"
+
+    embedding_model: str = Field(default="tfidf", description="Embedding model: tfidf or sentence-transformers")
+
+    relevance_threshold: int = Field(default=70, ge=0, le=100)
+    semantic_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
 
     reddit_base_url: str = "https://www.reddit.com"
     reddit_user_agent: str = "web:redditflow:v1.2 (by /u/redditflow_bot)"

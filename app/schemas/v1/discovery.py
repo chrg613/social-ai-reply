@@ -116,7 +116,30 @@ class OpportunityResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     posted_at: datetime | None
+    # Multi-agent platform fields
+    platform: str | None = None
+    agent_name: str | None = None
+    semantic_similarity: float | None = None
+    reason_relevant: str | None = None
+    risk_flags: list[str] = Field(default_factory=list)
+    matched_keywords: list[str] = Field(default_factory=list)
+    intent: str | None = None
+    rejection_reason: str | None = None
+    opportunity_type: str | None = None
+    draft_article: str | None = None
+    draft_post: str | None = None
+    engagement_score: int | None = None
 
 
 class OpportunityStatusRequest(BaseModel):
     status: str = Field(pattern="^(new|saved|drafting|posted|ignored|rejected)$")
+
+
+class OpportunityFilterRequest(BaseModel):
+    platform: str | None = Field(default=None, max_length=50)
+    status: str | None = Field(default=None, pattern="^(new|saved|drafting|posted|ignored|rejected)$")
+    min_score: int | None = Field(default=None, ge=0, le=100)
+    intent: str | None = Field(default=None, max_length=50)
+    keyword: str | None = Field(default=None, max_length=255)
+    agent_name: str | None = Field(default=None, max_length=255)
+

@@ -1,3 +1,3 @@
 @echo off
-cd /d C:\Users\ravi7\Downloads\instagram_poacher\web
-call npm run dev >> C:\Users\ravi7\Downloads\instagram_poacher\web\frontend.out.log 2>> C:\Users\ravi7\Downloads\instagram_poacher\web\frontend.err.log
+cd /d C:\Users\ravi7\OneDrive\Documents\GitHub\social-ai-reply\web
+call npm run dev >> frontend.out.log 2>> frontend.err.log

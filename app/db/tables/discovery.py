@@ -241,13 +241,25 @@ def list_opportunities_for_project(
     db: Client,
     project_id: int,
     status: str | None = None,
+    platform: str | None = None,
+    agent_name: str | None = None,
+    intent: str | None = None,
+    min_score: int | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
-    """List opportunities for a project with optional status filter."""
+    """List opportunities for a project with optional filters."""
     query = db.table(OPPORTUNITIES_TABLE).select("*").eq("project_id", project_id)
     if status:
         query = query.eq("status", status)
+    if platform:
+        query = query.eq("platform", platform)
+    if agent_name:
+        query = query.eq("agent_name", agent_name)
+    if intent:
+        query = query.eq("intent", intent)
+    if min_score is not None:
+        query = query.gte("score", min_score)
     result = query.order("score", desc=True).range(offset, offset + limit - 1).execute()
     return [_normalize_opportunity_record(row) for row in result.data]
 

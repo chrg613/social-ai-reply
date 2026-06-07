@@ -173,8 +173,15 @@ class LLMService:
     def __init__(self, provider_name: str | None = None) -> None:
         try:
             self._provider = get_provider(provider_name)
-        except ValueError as error:
-            raise RuntimeError(_llm_setup_message(provider_name, error)) from error
+        except ValueError:
+            # Ultimate fallback: template provider so the app never crashes
+            from app.services.infrastructure.llm.providers.template_provider import TemplateProvider
+            self._provider = TemplateProvider()
+            logger.warning(
+                "No LLM provider configured (%s). Falling back to template provider. "
+                "Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, etc.) for real LLM generation.",
+                _PROVIDER_API_KEY_ENV.get(provider_name or get_settings().llm_provider, "an API key"),
+            )
 
     @property
     def provider_name(self) -> str:
