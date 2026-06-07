@@ -86,7 +86,7 @@ class RedditAgent:
         if not brand_keywords:
             result.logs.append(f"WARNING: No enabled brand keywords for company {company_id}")
 
-        # Sort by weight descending, take top 10 per type
+        # Sort by weight descending, take top 10 per type, max 20 total
         keywords_by_type: dict[str, list[dict[str, Any]]] = {}
         for kw in brand_keywords:
             kw_type = str(kw.get("type", "core")).lower()
@@ -98,6 +98,7 @@ class RedditAgent:
         for ktype in keywords_by_type:
             top_keywords.extend(keywords_by_type[ktype])
         top_keywords.sort(key=lambda x: float(x.get("weight", 1.0)), reverse=True)
+        top_keywords = top_keywords[:20]
 
         # Map to RelevanceEngine expected shape
         relevance_keywords = [
@@ -334,21 +335,19 @@ class RedditAgent:
         queries: list[str] = []
         seen: set[str] = set()
         for kw in keywords:
+            if len(queries) >= 15:
+                break
             term = str(kw.get("keyword", "")).strip()
-            if not term:
+            if not term or len(term) < 3:
+                continue
+            # Skip queries that are too long or look like sentences
+            if len(term.split()) > 5:
                 continue
             # site query
             site_q = f"site:reddit.com {term}"
             if site_q not in seen:
                 queries.append(site_q)
                 seen.add(site_q)
-            # subreddit + keyword for core/pain_point types
-            kw_type = str(kw.get("type", "")).lower()
-            if kw_type in {"core", "pain_point", "problem", "feature"}:
-                sub_q = f"subreddit:{_guess_subreddit(kw_type)} {term}"
-                if sub_q not in seen:
-                    queries.append(sub_q)
-                    seen.add(sub_q)
         return queries
 
     def _normalize_and_deduplicate(

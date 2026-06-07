@@ -66,6 +66,9 @@ class SearchResult:
 class RedditDiscoveryService:
     """Discover Reddit posts and subreddit metadata without Reddit OAuth."""
 
+    # Class-level flag: once DDG fails once, skip it for all future instances
+    _ddg_disabled: bool = False
+
     def __init__(self) -> None:
         settings = get_settings()
         self._settings = settings
@@ -450,11 +453,17 @@ class RedditDiscoveryService:
             results = self._search_serpapi(query, limit=limit)
         elif provider == "bing":
             results = self._search_bing(query, limit=limit)
+        elif provider == "reddit":
+            # Skip DDG entirely — go straight to Reddit RSS search
+            pass
         else:
             try:
                 results = self._search_duckduckgo(query, limit=limit)
             except Exception as exc:
                 log.debug("DuckDuckGo failed for %r: %s", query, exc)
+                # Disable DDG for all future calls in this process
+                RedditDiscoveryService._ddg_disabled = True
+                log.info("DuckDuckGo disabled for remaining searches in this process")
 
         # DuckDuckGo is often broken (JS SPA / connection reset). Always try
         # Reddit's RSS search as a fallback when external search fails.
@@ -470,12 +479,15 @@ class RedditDiscoveryService:
         return results
 
     def _resolve_search_provider(self) -> str:
-        if self._search_provider in {"serpapi", "bing", "duckduckgo"}:
+        if self._search_provider in {"serpapi", "bing", "duckduckgo", "reddit"}:
             return self._search_provider
         if self._serpapi_api_key:
             return "serpapi"
         if self._bing_search_api_key:
             return "bing"
+        # If DDG has failed before, skip it entirely
+        if self._ddg_disabled:
+            return "reddit"
         return "duckduckgo"
 
     def _search_serpapi(self, query: str, *, limit: int) -> list[SearchResult]:
@@ -581,12 +593,18 @@ class RedditDiscoveryService:
         Reddit blocks the JSON search API (403), but the Atom/RSS feed at
         ``/search.rss`` still works with a descriptive User-Agent.
         """
-        # Strip site: prefix if present — Reddit search doesn't need it
+        # Clean up query for Reddit search — strip DDG/external-search syntax
         clean_query = query
         for prefix in ("site:reddit.com ", "site:reddit.com"):
             if clean_query.lower().startswith(prefix):
                 clean_query = clean_query[len(prefix):]
                 break
+        # Strip subreddit prefix like "/r/subreddit " added by _build_external_queries
+        import re as _re
+
+        clean_query = _re.sub(r"^/r/\w+\s+", "", clean_query)
+        # Remove surrounding quotes
+        clean_query = clean_query.strip('"').strip("'")
         clean_query = clean_query.strip()
         if not clean_query:
             return []
