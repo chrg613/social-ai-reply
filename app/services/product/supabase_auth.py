@@ -1,6 +1,6 @@
 """Supabase Auth service — handles all communication with Supabase Auth API.
 
-This module is the single point of integration between RedditFlow and Supabase Auth.
+This module is the single point of integration between SignalFlow and Supabase Auth.
 FastAPI remains the backend for business logic; Supabase handles identity only.
 """
 

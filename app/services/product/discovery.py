@@ -36,7 +36,7 @@ from app.services.product.relevance import (
     tokenize,
 )
 
-log = logging.getLogger("redditflow.discovery")
+log = logging.getLogger("signalflow.discovery")
 
 DEFAULT_MIN_SUBREDDIT_FIT = 30
 MAX_DISCOVERY_KEYWORDS = 5

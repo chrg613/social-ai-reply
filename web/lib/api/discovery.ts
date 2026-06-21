@@ -57,7 +57,7 @@ export async function removeSubreddit(token: string, projectId: number, subreddi
 export async function triggerScan(
   token: string,
   projectId: number,
-  options?: { search_window_hours?: number; max_posts_per_subreddit?: number }
+  options?: { search_window_hours?: number; max_posts_per_subreddit?: number; platforms?: string[] }
 ) {
   return apiRequest<ScanRun>(
     `/v1/scans?project_id=${projectId}`,

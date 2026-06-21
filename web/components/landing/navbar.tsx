@@ -67,7 +67,7 @@ export function Navbar() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="text-lg font-bold tracking-tight text-foreground">
-            RedditFlow
+            SignalFlow
           </Link>
 
           {/* Nav Links */}
@@ -142,7 +142,7 @@ export function Navbar() {
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetContent side="right" className="w-72">
               <SheetHeader>
-                <SheetTitle>RedditFlow</SheetTitle>
+                <SheetTitle>SignalFlow</SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-4 px-4 pt-2">
                 {navLinks.map((link) => (

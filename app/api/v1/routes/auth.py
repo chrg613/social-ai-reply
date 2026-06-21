@@ -117,7 +117,7 @@ def ensure_default_project(supabase: Client, workspace: dict) -> dict:
             "workspace_id": workspace["id"],
             "name": base_name,
             "slug": slug,
-            "is_active": True,
+            "status": "active",
             "description": None,
         },
     )

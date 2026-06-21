@@ -68,8 +68,8 @@ export function Hero() {
           variants={fadeUp}
           className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl"
         >
-          RedditFlow tracks your brand across ChatGPT, Perplexity, Gemini, and Claude — then finds
-          the Reddit conversations that shape what they say.
+          SignalFlow tracks your brand across Reddit, X, Instagram, LinkedIn, and TikTok — then uses
+          AI to find the conversations that shape what people say about you.
         </m.p>
 
         {/* CTA Buttons */}

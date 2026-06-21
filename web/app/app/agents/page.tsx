@@ -193,8 +193,11 @@ export default function AgentsPage() {
                 <SelectContent>
                   <SelectItem value="">All</SelectItem>
                   <SelectItem value="reddit">Reddit</SelectItem>
-                  <SelectItem value="quora">Quora</SelectItem>
+                  <SelectItem value="twitter">Twitter / X</SelectItem>
+                  <SelectItem value="instagram">Instagram</SelectItem>
                   <SelectItem value="linkedin">LinkedIn</SelectItem>
+                  <SelectItem value="tiktok">TikTok</SelectItem>
+                  <SelectItem value="hackernews">Hacker News</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -209,6 +212,7 @@ export default function AgentsPage() {
                   <SelectItem value="new">New</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="review">Needs Review</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -294,7 +298,24 @@ export default function AgentsPage() {
                     <h3 className="text-sm font-semibold truncate">{opp.title}</h3>
                     <div className="mt-1 flex flex-wrap gap-1">
                       <ScoreBadge score={opp.score} />
+                      {(opp as Record<string, unknown>).confidence !== undefined && (
+                        <span className={cn(
+                          "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                          Number((opp as Record<string, unknown>).confidence) >= 0.6
+                            ? "bg-emerald-500/10 text-emerald-600"
+                            : Number((opp as Record<string, unknown>).confidence) >= 0.4
+                              ? "bg-amber-500/10 text-amber-600"
+                              : "bg-red-500/10 text-red-600"
+                        )}>
+                          {Math.round(Number((opp as Record<string, unknown>).confidence) * 100)}% sure
+                        </span>
+                      )}
                       <StatusBadge variant="info">{opp.status}</StatusBadge>
+                      {opp.status === "review" && (
+                        <Badge variant="outline" className="text-[11px] px-1.5 py-0 border-amber-400 bg-amber-500/10 text-amber-600">
+                          Needs Review
+                        </Badge>
+                      )}
                       {(opp.keyword_hits || []).slice(0, 3).map((k) => (
                         <Badge key={k} variant="secondary" className="text-[11px] px-1.5 py-0">
                           {k}

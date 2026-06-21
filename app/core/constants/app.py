@@ -5,14 +5,14 @@ values that are used throughout the application.
 """
 
 # Application metadata
-APP_NAME = "RedditFlow"
-APP_VERSION = "2.1.0"
-APP_DESCRIPTION = "AI Visibility and Community Engagement Platform"
+APP_NAME = "SignalFlow"
+APP_VERSION = "3.0.0"
+APP_DESCRIPTION = "Multi-Platform Social Intelligence & AI Marketing Engine"
 
 # API configuration
 API_PREFIX = "/v1"
-API_TITLE = "RedditFlow API"
-API_VERSION = "2.1.0"
+API_TITLE = "SignalFlow API"
+API_VERSION = "3.0.0"
 
 # Default environment
 DEFAULT_ENVIRONMENT = "development"
@@ -25,7 +25,7 @@ DEFAULT_CORS_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
 # Schema is managed by Supabase — no local database URL needed
 
 # LLM provider defaults
-# Gemini is the primary/default provider for RedditFlow. OpenAI, Perplexity,
+# Gemini is the primary/default provider for SignalFlow. OpenAI, Perplexity,
 # and Claude are supported alternatives but are NOT required — with only a
 # GEMINI_API_KEY set, the whole stack works end-to-end. The registry at
 # app/services/infrastructure/llm/providers/_registry.py skips any provider
@@ -39,7 +39,7 @@ DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
 
 # Reddit API defaults
 REDDIT_BASE_URL = "https://www.reddit.com"
-DEFAULT_REDDIT_USER_AGENT = "web:redditflow:v1.2 (by /u/redditflow_bot)"
+DEFAULT_REDDIT_USER_AGENT = "web:signalflow:v1.2 (by /u/signalflow_bot)"
 
 # Email defaults
 DEFAULT_SMTP_PORT = 587

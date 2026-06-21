@@ -1,4 +1,4 @@
-"""Centralized constants for RedditFlow application.
+"""Centralized constants for SignalFlow application.
 
 Import constants from their respective modules:
     from app.core.constants import limits, timeouts, errors, app

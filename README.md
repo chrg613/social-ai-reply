@@ -1,4 +1,4 @@
-# RedditFlow
+# SignalFlow
 
 Multi-Agent AI Marketing Platform — find relevant social opportunities, score them with a transparent relevance engine, and draft helpful replies. All posting is manual; nothing is auto-posted.
 

@@ -53,13 +53,17 @@ export function useScanRunner(
     }
   }
 
-  async function runScan() {
+  async function runScan(platforms?: string[]) {
     if (!token || !projectId) {
       return;
     }
     setScanning(true);
     try {
-      const run = await triggerScan(token, projectId, { search_window_hours: 72, max_posts_per_subreddit: 10 });
+      const run = await triggerScan(token, projectId, {
+        search_window_hours: 72,
+        max_posts_per_subreddit: 10,
+        platforms: platforms?.length ? platforms : undefined,
+      });
       setScanRun(run);
       if (run.status !== "running") {
         // Backward compatible: the backend ran the scan synchronously.

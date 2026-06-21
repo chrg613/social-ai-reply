@@ -1,4 +1,4 @@
-"""Core module for RedditFlow application.
+"""Core module for SignalFlow application.
 
 Provides configuration, exception classes, and constants.
 """

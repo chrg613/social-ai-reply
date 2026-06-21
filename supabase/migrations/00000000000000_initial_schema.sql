@@ -1,7 +1,7 @@
 -- ============================================================================
--- RedditFlow — Complete Initial Schema
+-- SignalFlow — Complete Initial Schema
 -- ============================================================================
--- Creates ALL tables required by RedditFlow from scratch.
+-- Creates ALL tables required by SignalFlow from scratch.
 -- Safe to re-run: uses IF NOT EXISTS throughout.
 -- Run this in your Supabase SQL Editor before starting the app.
 -- ============================================================================

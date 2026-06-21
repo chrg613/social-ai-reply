@@ -1,7 +1,7 @@
 import type { Project } from "./api";
 
-const STORAGE_KEY = "redditflow-project-id";
-export const PROJECT_CHANGE_EVENT = "redditflow-project-change";
+const STORAGE_KEY = "signalflow-project-id";
+export const PROJECT_CHANGE_EVENT = "signalflow-project-change";
 
 export function getStoredProjectId(): number | null {
   if (typeof window === "undefined") {

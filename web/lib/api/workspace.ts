@@ -59,7 +59,7 @@ export async function getUsage(token: string, projectId?: number): Promise<Usage
 }
 
 function sanitizeDownloadFilename(raw: string | null | undefined): string {
-  const fallback = "redditflow-export.json";
+  const fallback = "signalflow-export.json";
   if (!raw) {
     return fallback;
   }

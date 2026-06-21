@@ -29,7 +29,7 @@ from app.services.product.discovery import discover_and_store_subreddits
 from app.services.product.scanner import revalidate_opportunity, run_scan
 from app.services.product.scoring import MIN_RELEVANT_OPPORTUNITY_SCORE
 
-log = logging.getLogger("redditflow.pipeline")
+log = logging.getLogger("signalflow.pipeline")
 TARGET_PIPELINE_SUBREDDITS = 10
 TARGET_PIPELINE_KEYWORDS = 10
 _LLM_RETRY_DELAY_SECONDS = 5.0
@@ -82,7 +82,7 @@ def run_auto_pipeline_background(
             return
 
         copilot = ProductCopilot()
-        log.info("Step 1/7: Analyzing website %s", website_url)
+        log.info("Step 1/8: Analyzing website %s", website_url)
 
         # ── Step 1: Analyze Website (0→15%) ─────────────────────
         update_auto_pipeline(db, pipeline_id, {
@@ -144,7 +144,7 @@ def run_auto_pipeline_background(
         proj["brand_profile"] = brand
 
         # ── Step 2: Generate Personas (15→30%) ──────────────────
-        log.info("Step 2/7: Generating personas")
+        log.info("Step 2/8: Generating personas")
         update_auto_pipeline(db, pipeline_id, {
             "status": "generating_personas",
             "progress": 20,
@@ -186,7 +186,7 @@ def run_auto_pipeline_background(
             update_auto_pipeline(db, pipeline_id, {"personas_generated": len(personas_data), "progress": 30})
 
         # ── Step 3: Discover Keywords (30→45%) ──────────────────
-        log.info("Step 3/7: Discovering keywords")
+        log.info("Step 3/8: Discovering keywords")
         update_auto_pipeline(db, pipeline_id, {
             "status": "discovering_keywords",
             "progress": 35,
@@ -252,7 +252,7 @@ def run_auto_pipeline_background(
             log.info("Inserted %d new keywords (%d already existed)", new_kw_count, len(keywords_data) - new_kw_count)
 
         # ── Step 4: Discover Subreddits (45→60%) ────────────────
-        log.info("Step 4/7: Discovering subreddits")
+        log.info("Step 4/8: Discovering subreddits")
         update_auto_pipeline(db, pipeline_id, {
             "status": "finding_subreddits",
             "progress": 50,
@@ -312,11 +312,11 @@ def run_auto_pipeline_background(
             })
             return
 
-        # ── Step 5: Scan for Opportunities (60→75%) ─────────────
-        log.info("Step 5/7: Scanning Reddit for opportunities")
+        # ── Step 5: Scan Reddit for Opportunities (60→70%) ────────
+        log.info("Step 5/8: Scanning Reddit for opportunities")
         update_auto_pipeline(db, pipeline_id, {
             "status": "scanning_opportunities",
-            "progress": 65,
+            "progress": 62,
             "current_step": "Cooling down before scanning (Reddit rate-limit recovery)...",
         })
 
@@ -345,13 +345,7 @@ def run_auto_pipeline_background(
             opp_found = primary_opp_found
             # Fallback scan: when the narrow 72-hour window yields nothing,
             # widen the time horizon to 30 days AND drop the score floor so
-            # the user gets *something* to review. The previous
-            # `max(MIN - 10, 45)` expression was a bug — it RAISED the floor
-            # above MIN (35 → 45), which made the fallback stricter than the
-            # primary scan. We now use a sensible lower floor (15) so the
-            # fallback is genuinely looser.
-            # Low-yield runs should trigger the broader fallback too.
-            # Stopping at 2 or 3 opportunities still feels broken to users.
+            # the user gets *something* to review.
             if opp_found <= 3:
                 fallback_scan_req = ScanRequest(
                     project_id=project_id,
@@ -363,19 +357,71 @@ def run_auto_pipeline_background(
                 if fallback_scan_run.get("fatal_error"):
                     raise RuntimeError(fallback_scan_run.get("error_message") or "Opportunity scan could not access Reddit.")
                 opp_found = primary_opp_found + fallback_scan_run["opportunities_found"]
-            log.info("Scan complete — %d opportunities found", opp_found)
+            log.info("Reddit scan complete — %d opportunities found", opp_found)
         except Exception as e:
-            log.error("Scan step failed: %s\n%s", e, traceback.format_exc())
+            log.error("Reddit scan step failed: %s\n%s", e, traceback.format_exc())
             update_auto_pipeline(db, pipeline_id, {
                 "status": "failed",
                 "error_message": f"Opportunity scan failed: {str(e)[:500]}",
                 "completed_at": datetime.now(UTC).isoformat(),
             })
             return
-        update_auto_pipeline(db, pipeline_id, {"opportunities_found": opp_found, "progress": 75})
+        update_auto_pipeline(db, pipeline_id, {"opportunities_found": opp_found, "progress": 70})
+
+        # ── Step 5b: Multi-Platform Scan (70→80%) ────────────────
+        # Scan Twitter, Instagram, LinkedIn for additional opportunities
+        # using the RapidAPI adapters. This is non-fatal: if platform
+        # scanning fails (no API key, network error, etc.) the pipeline
+        # continues with whatever Reddit already found.
+        log.info("Step 5b/8: Scanning social platforms (Twitter, Instagram, LinkedIn)")
+        update_auto_pipeline(db, pipeline_id, {
+            "status": "scanning_platforms",
+            "progress": 72,
+            "current_step": "Scanning Twitter, Instagram, LinkedIn for opportunities...",
+        })
+
+        platform_opp_found = 0
+        try:
+            from app.services.product.platform_scanner import run_platform_scan
+
+            available_platforms = []
+            # Check which platforms we can scan (need RAPIDAPI_KEY)
+            import os
+            if os.getenv("RAPIDAPI_KEY"):
+                available_platforms = ["twitter", "instagram", "linkedin"]
+            else:
+                log.info("RAPIDAPI_KEY not set — skipping multi-platform scan")
+
+            if available_platforms:
+                platform_result = run_platform_scan(
+                    db,
+                    proj,
+                    platforms=available_platforms,
+                    limit_per_platform=25,
+                    min_score=15,
+                )
+                platform_opp_found = platform_result.get("opportunities_found", 0)
+                platform_error = platform_result.get("error")
+                if platform_error:
+                    log.warning("Platform scan returned error (non-fatal): %s", platform_error)
+                else:
+                    log.info(
+                        "Multi-platform scan complete — %d opportunities from %s",
+                        platform_opp_found,
+                        ", ".join(available_platforms),
+                    )
+        except Exception as e:
+            log.warning("Multi-platform scan failed (non-fatal, continuing): %s\n%s", e, traceback.format_exc())
+
+        total_opp_found = opp_found + platform_opp_found
+        update_auto_pipeline(db, pipeline_id, {
+            "opportunities_found": total_opp_found,
+            "progress": 80,
+            "current_step": f"Found {total_opp_found} opportunities ({opp_found} Reddit + {platform_opp_found} social)",
+        })
 
         # ── Step 6: Generate Drafts (75→95%) ────────────────────
-        log.info("Step 6/7: Generating reply drafts")
+        log.info("Step 6/8: Generating reply drafts")
         update_auto_pipeline(db, pipeline_id, {
             "status": "generating_drafts",
             "progress": 80,
@@ -395,7 +441,10 @@ def run_auto_pipeline_background(
                 if not is_valid:
                     update_opportunity(db, opp["id"], {"status": "ignored"})
                     continue
-                content, rationale, _source_prompt = copilot.generate_reply(opp, brand_dict, prompts)
+                content, rationale, _source_prompt = copilot.generate_reply(
+                    opp, brand_dict, prompts,
+                    platform=opp.get("platform"),
+                )
                 create_reply_draft(db, {
                     "project_id": project_id,
                     "opportunity_id": opp["id"],
@@ -411,7 +460,7 @@ def run_auto_pipeline_background(
         log.info("Generated %d drafts for %d opportunities", drafts_count, len(opportunities))
 
         # ── Step 7: Finalize (95→100%) ──────────────────────────
-        log.info("Step 7/7: Finalizing sales package")
+        log.info("Step 7/8: Finalizing sales package")
         update_auto_pipeline(db, pipeline_id, {
             "current_step": "Finalizing sales package...",
         })

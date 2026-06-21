@@ -14,7 +14,7 @@ interface AuthState {
   setToken: (token: string | null) => void;
 }
 
-export const STORAGE_KEY = "redditflow-auth";
+export const STORAGE_KEY = "signalflow-auth";
 export const LEGACY_STORAGE_KEY = "reply-radar-auth";
 
 /**

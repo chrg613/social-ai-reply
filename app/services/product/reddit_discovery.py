@@ -37,7 +37,7 @@ from app.services.product.reddit import (
 )
 from app.services.product.relevance import has_meaningful_phrase_overlap, tokenize
 
-log = logging.getLogger("redditflow.reddit_discovery")
+log = logging.getLogger("signalflow.reddit_discovery")
 
 # Process-wide cache shared across discovery service instances so repeated
 # subreddit/search hydration in a worker can reuse responses.

@@ -103,7 +103,7 @@ const NAV_SECTIONS = [
     icon: Radar,
     items: [
       { href: "/app/agents", label: "Agents Feed", icon: Radar },
-      { href: "/app/discovery", label: "Reddit Radar", icon: Radar },
+      { href: "/app/discovery", label: "Social Radar", icon: Radar },
       { href: "/app/content", label: "Content Studio", icon: FileText },
     ],
   },
@@ -133,7 +133,7 @@ const PATH_TITLES: Record<string, string> = {
   "/app/brand-brain": "Intelligence / Brand Brain",
   "/app/sources": "Intelligence / Sources",
   "/app/agents": "Opportunities / Agents Feed",
-  "/app/discovery": "Opportunities / Reddit Radar",
+  "/app/discovery": "Opportunities / Social Radar",
   "/app/content": "Opportunities / Content Studio",
   "/app/content-studio": "Opportunities / Content Studio (New)",
   "/app/subreddits": "Engage / Communities",
@@ -486,7 +486,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
               </div>
               {!sidebarCollapsed && (
                 <div className="flex flex-col leading-none">
-                  <span className="text-base font-bold tracking-tight">RedditFlow</span>
+                  <span className="text-base font-bold tracking-tight">SignalFlow</span>
                   <span className="text-[9px] font-semibold text-sidebar-primary/70 uppercase tracking-widest mt-1">Community OS</span>
                 </div>
               )}

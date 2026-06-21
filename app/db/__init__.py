@@ -1,4 +1,4 @@
-"""Database module for RedditFlow application.
+"""Database module for SignalFlow application.
 
 Provides Supabase client and typed table operations.
 """

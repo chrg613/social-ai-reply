@@ -1,4 +1,4 @@
-"""Pydantic AI Agent definitions for RedditFlow LLM operations.
+"""Pydantic AI Agent definitions for SignalFlow LLM operations.
 
 Each agent wraps a specific LLM task with:
 - Typed output via Pydantic schemas (automatic validation + re-prompting)

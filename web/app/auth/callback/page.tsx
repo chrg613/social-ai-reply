@@ -120,7 +120,7 @@ export default function AuthCallbackPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <Link href="/" className="mb-6 text-2xl font-bold text-primary">
-        RedditFlow
+        SignalFlow
       </Link>
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
       <p className="mt-4 text-sm text-muted-foreground">

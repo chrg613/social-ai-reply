@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────
-# RedditFlow — One-Command Setup
+# SignalFlow — One-Command Setup
 # Usage: ./scripts/setup.sh
 # ──────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -19,7 +19,7 @@ fail()  { echo -e "${RED}✗${NC}  $1"; }
 
 echo ""
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BOLD}  RedditFlow — Project Setup${NC}"
+echo -e "${BOLD}  SignalFlow — Project Setup${NC}"
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 

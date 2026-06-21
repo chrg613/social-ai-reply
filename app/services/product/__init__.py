@@ -1,6 +1,6 @@
-"""Product services for RedditFlow application.
+"""Product services for SignalFlow application.
 
-Core business logic services for the RedditFlow product.
+Core business logic services for the SignalFlow product.
 """
 
 from app.core.logging import setup_logging

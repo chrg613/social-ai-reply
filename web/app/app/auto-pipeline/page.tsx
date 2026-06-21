@@ -28,8 +28,9 @@ const PIPELINE_STEPS = [
   { key: "analyzing", label: "Analyzing website" },
   { key: "generating_personas", label: "Generating personas" },
   { key: "discovering_keywords", label: "Discovering keywords" },
-  { key: "finding_subreddits", label: "Finding subreddits" },
-  { key: "scanning_opportunities", label: "Scanning opportunities" },
+  { key: "finding_subreddits", label: "Finding communities" },
+  { key: "scanning_opportunities", label: "Scanning Reddit" },
+  { key: "scanning_platforms", label: "Scanning Twitter, Instagram, LinkedIn" },
   { key: "generating_drafts", label: "Generating drafts" },
 ];
 
@@ -648,7 +649,7 @@ export default function AutoPipelinePage() {
           <div className="mb-6 rounded-xl border bg-muted/40 p-4 text-left">
             <p className="mb-2 text-sm font-semibold text-foreground">Reddit discovery is temporarily unavailable</p>
             <p className="mb-2 text-[13px] text-muted-foreground">
-              RedditFlow now runs without <code>REDDIT_CLIENT_ID</code> or <code>REDDIT_CLIENT_SECRET</code>. This
+              SignalFlow now runs without <code>REDDIT_CLIENT_ID</code> or <code>REDDIT_CLIENT_SECRET</code>. This
               failure means the public Reddit feeds and external search fallback were both unavailable from this
               machine.
             </p>

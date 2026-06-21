@@ -76,7 +76,11 @@ class ScanRequest(BaseModel):
     search_window_hours: int = Field(default=72, ge=1, le=720)
     max_posts_per_subreddit: int = Field(default=10, ge=1, le=50)
     min_score: int = Field(default=25, ge=0, le=100)
-    platform: str = Field(default="reddit", pattern="^(reddit|twitter|all)$")
+    platform: str = Field(default="reddit", pattern="^(reddit|twitter|instagram|linkedin|all)$")
+    platforms: list[str] = Field(
+        default_factory=list,
+        description="Additional platforms to scan alongside the primary platform (e.g., ['twitter', 'linkedin'])",
+    )
 
 
 class ScanRunResponse(BaseModel):

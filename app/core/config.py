@@ -60,7 +60,7 @@ def _normalize_placeholder(value: str) -> str:
 
 
 class Settings(BaseSettings):
-    app_name: str = "RedditFlow"
+    app_name: str = "SignalFlow"
     environment: str = "development"
     # When True, plan limits from plan_entitlements (with PLAN_CATALOG fallback)
     # are enforced via HTTP 402. Off by default: the product is currently free.
@@ -79,7 +79,7 @@ class Settings(BaseSettings):
 
     encryption_key: str | None = None
 
-    # LLM Provider selection — Gemini is the default for RedditFlow.
+    # LLM Provider selection — Gemini is the default for SignalFlow.
     # See app/core/constants/app.py::DEFAULT_LLM_PROVIDER. Only the active
     # provider's credentials are required; the registry silently skips any
     # provider whose API key is missing.
@@ -135,7 +135,10 @@ class Settings(BaseSettings):
     reddit_client_secret: str | None = None
     reddit_redirect_uri: str | None = None
 
-    # Apify Integration
+    # RapidAPI (multi-platform social media scraping)
+    rapidapi_key: str | None = None
+
+    # Apify Integration (deprecated)
     apify_api_token: str | None = None
 
     stripe_secret_key: str | None = None

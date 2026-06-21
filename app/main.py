@@ -1,4 +1,4 @@
-"""RedditFlow API - AI Visibility and Community Engagement Platform.
+"""SignalFlow API - AI Visibility and Community Engagement Platform.
 
 Backend API server using FastAPI with Supabase for authentication and database.
 """
@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     Supabase manages the schema. Tables should be created via Supabase
     dashboard, migrations, or SQL scripts.
     """
-    logger.info("Starting RedditFlow API...")
+    logger.info("Starting SignalFlow API...")
     workers = os.environ.get("WEB_CONCURRENCY") or os.environ.get("UVICORN_WORKERS") or "1"
     if workers.isdigit() and int(workers) > 1:
         logger.warning(
@@ -64,14 +64,14 @@ async def lifespan(app: FastAPI):
             logger.info("No pending migrations.")
     except Exception:
         logger.exception("Migration runner failed — continuing startup")
-    logger.info("RedditFlow API started successfully.")
+    logger.info("SignalFlow API started successfully.")
     yield
-    logger.info("Shutting down RedditFlow API.")
+    logger.info("Shutting down SignalFlow API.")
 
 
 settings = get_settings()
 app = FastAPI(
-    title="RedditFlow API",
+    title="SignalFlow API",
     description="AI Visibility and Community Engagement Platform",
     version="2.1.0",
     lifespan=lifespan,
@@ -143,4 +143,4 @@ def readiness_check():
 @app.get("/")
 def root():
     """Root endpoint."""
-    return {"name": "RedditFlow API", "version": "2.1.0", "status": "running"}
+    return {"name": "SignalFlow API", "version": "2.1.0", "status": "running"}

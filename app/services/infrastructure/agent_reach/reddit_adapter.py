@@ -1,6 +1,6 @@
 """rdt-cli adapter — translates rdt-cli JSON output into RedditPost objects.
 
-Bridges Agent-Reach's rdt-cli output format to RedditFlow's existing
+Bridges Agent-Reach's rdt-cli output format to SignalFlow's existing
 RedditPost dataclass so the scoring, opportunity, and drafting pipelines
 continue to work unchanged.
 """

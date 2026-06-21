@@ -4,7 +4,7 @@ import { m } from "framer-motion";
 
 const testimonials = [
   {
-    quote: "RedditFlow showed us that ChatGPT was recommending our competitor in 8 out of 10 queries. Within a month of targeted engagement, we flipped that to 7 out of 10 mentioning us.",
+    quote: "SignalFlow showed us that ChatGPT was recommending our competitor in 8 out of 10 queries. Within a month of targeted engagement, we flipped that to 7 out of 10 mentioning us.",
     name: "Sarah Chen",
     role: "Head of Growth",
     company: "TechStack",
@@ -16,7 +16,7 @@ const testimonials = [
     company: "Growth Agency Co.",
   },
   {
-    quote: "We went from invisible in AI search results to being the #1 recommended tool in our category on Perplexity. RedditFlow made it systematic instead of random.",
+    quote: "We went from invisible in AI search results to being the #1 recommended tool in our category on Perplexity. SignalFlow made it systematic instead of random.",
     name: "Aisha Patel",
     role: "Founder",
     company: "ClearView Analytics",

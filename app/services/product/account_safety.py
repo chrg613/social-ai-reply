@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 SHADOWBAN_CHECK_URL_TEMPLATE = "https://www.reddit.com/user/{username}/about.json"
 SHADOWBAN_CHECK_TIMEOUT_SECONDS = 10.0
 _REDDIT_HOST = "www.reddit.com"
-_USER_AGENT = "RedditFlow/1.0 (account-safety)"
+_USER_AGENT = "SignalFlow/1.0 (account-safety)"
 
 # Module-level budget so every shadowban probe in the process shares the same
 # per-host throttle/circuit breaker (same pattern as reddit_discovery.py).

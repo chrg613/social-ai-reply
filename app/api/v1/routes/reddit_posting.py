@@ -100,7 +100,7 @@ def _exchange_authorization_code(code: str) -> dict:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Reddit OAuth is not fully configured (client id / secret / redirect URI missing).",
         )
-    user_agent = getattr(settings, "reddit_user_agent", None) or "RedditFlow/1.0"
+    user_agent = getattr(settings, "reddit_user_agent", None) or "SignalFlow/1.0"
     try:
         resp = httpx.post(
             REDDIT_TOKEN_URL,
@@ -148,7 +148,7 @@ def _fetch_reddit_identity(access_token: str) -> dict:
     caller falls back to whatever the client advertised as the username.
     """
     settings = get_settings()
-    user_agent = getattr(settings, "reddit_user_agent", None) or "RedditFlow/1.0"
+    user_agent = getattr(settings, "reddit_user_agent", None) or "SignalFlow/1.0"
     try:
         resp = httpx.get(
             REDDIT_IDENTITY_URL,

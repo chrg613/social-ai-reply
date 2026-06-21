@@ -46,7 +46,7 @@ export function FinalCta() {
                 Get Started Free
               </Link>
               <a
-                href="mailto:hello@redditflow.com"
+                href="mailto:hello@signalflow.com"
                 className="inline-flex h-12 items-center justify-center rounded-xl border border-white/30 px-8 text-base font-semibold text-white transition-all duration-200 hover:border-white hover:scale-[1.02]"
               >
                 Schedule Demo

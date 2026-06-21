@@ -224,7 +224,7 @@ export function VoiceProfilesSection({
         <div>
           <h3 className="text-sm font-semibold">Voice profiles</h3>
           <p className="text-xs text-muted-foreground">
-            Teach RedditFlow how you write. The default profile is applied automatically to new reply drafts.
+            Teach SignalFlow how you write. The default profile is applied automatically to new reply drafts.
           </p>
         </div>
         <Button size="sm" onClick={openCreateDialog}>

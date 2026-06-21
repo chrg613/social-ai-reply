@@ -27,7 +27,7 @@ class EmailService:
     @staticmethod
     def send_email(to_email: str, subject: str, html_body: str, text_body: str = ""):
         settings = get_settings()
-        sender = settings.smtp_from_email or "noreply@redditflow.com"
+        sender = settings.smtp_from_email or "noreply@signalflow.com"
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = sender
@@ -61,9 +61,9 @@ class EmailService:
             <a href="{reset_url}" style="display:inline-block;padding:12px 24px;background:#E94560;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">Reset Password</a>
             <p style="margin-top:16px;color:#6B7280;font-size:13px;">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
             <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0;">
-            <p style="color:#9CA3AF;font-size:12px;">RedditFlow — AI Visibility Platform</p>
+            <p style="color:#9CA3AF;font-size:12px;">SignalFlow — AI Visibility Platform</p>
         </div>"""
-        return EmailService.send_email(to_email, "Reset Your Password — RedditFlow", html)
+        return EmailService.send_email(to_email, "Reset Your Password — SignalFlow", html)
 
     @staticmethod
     def send_welcome(to_email: str, user_name: str = ""):
@@ -71,7 +71,7 @@ class EmailService:
         frontend_url = settings.frontend_url or "http://localhost:3000"
         html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-            <h2 style="color: #1A1A2E;">Welcome to RedditFlow!</h2>
+            <h2 style="color: #1A1A2E;">Welcome to SignalFlow!</h2>
             <p>Hi{' ' + user_name if user_name else ''},</p>
             <p>Your account is ready. Here's how to get started:</p>
             <ol>
@@ -82,9 +82,9 @@ class EmailService:
             </ol>
             <a href="{frontend_url}/app/dashboard" style="display:inline-block;padding:12px 24px;background:#E94560;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">Go to Dashboard</a>
             <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0;">
-            <p style="color:#9CA3AF;font-size:12px;">RedditFlow — AI Visibility Platform</p>
+            <p style="color:#9CA3AF;font-size:12px;">SignalFlow — AI Visibility Platform</p>
         </div>"""
-        return EmailService.send_email(to_email, "Welcome to RedditFlow!", html)
+        return EmailService.send_email(to_email, "Welcome to SignalFlow!", html)
 
     @staticmethod
     def send_invitation(to_email: str, workspace_name: str, inviter_name: str, token: str):
@@ -94,13 +94,13 @@ class EmailService:
         html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
             <h2 style="color: #1A1A2E;">You're Invited!</h2>
-            <p>{inviter_name} invited you to join <strong>{workspace_name}</strong> on RedditFlow.</p>
+            <p>{inviter_name} invited you to join <strong>{workspace_name}</strong> on SignalFlow.</p>
             <a href="{accept_url}" style="display:inline-block;padding:12px 24px;background:#E94560;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">Accept Invitation</a>
             <p style="margin-top:16px;color:#6B7280;font-size:13px;">This invitation expires in 7 days.</p>
             <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0;">
-            <p style="color:#9CA3AF;font-size:12px;">RedditFlow — AI Visibility Platform</p>
+            <p style="color:#9CA3AF;font-size:12px;">SignalFlow — AI Visibility Platform</p>
         </div>"""
-        return EmailService.send_email(to_email, f"Join {workspace_name} on RedditFlow", html)
+        return EmailService.send_email(to_email, f"Join {workspace_name} on SignalFlow", html)
 
     @staticmethod
     def send_visibility_alert(to_email: str, brand_name: str, model_name: str, old_sov: float, new_sov: float):
@@ -113,6 +113,6 @@ class EmailService:
             <p>Previous: {old_sov:.1f}% → Current: {new_sov:.1f}%</p>
             <a href="#" style="display:inline-block;padding:12px 24px;background:#0F3460;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">View Details</a>
             <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0;">
-            <p style="color:#9CA3AF;font-size:12px;">RedditFlow — AI Visibility Platform</p>
+            <p style="color:#9CA3AF;font-size:12px;">SignalFlow — AI Visibility Platform</p>
         </div>"""
         return EmailService.send_email(to_email, f"Visibility {direction.title()}: {brand_name} on {model_name}", html)
