@@ -120,6 +120,10 @@ class Settings(BaseSettings):
     reddit_base_url: str = "https://old.reddit.com"
     reddit_user_agent: str = "web:signalflow:v1.0 (by /u/SignalFlowBot)"
     reddit_search_provider: str = "auto"
+    # Official Reddit OAuth credentials (https://www.reddit.com/prefs/apps)
+    # Gives 100 req/min for free — much better than RapidAPI's 50/month.
+    reddit_client_id: str = ""
+    reddit_client_secret: str = ""
     # Min seconds between requests to reddit.com hosts.  Reddit's public
     # endpoints are strict about rate limits; 4s keeps us safely under.
     reddit_scrape_min_interval: float = 4.0
