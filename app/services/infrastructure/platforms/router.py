@@ -88,8 +88,10 @@ class PlatformRouter:
         """
         all_posts: list[UnifiedPost] = []
 
-        # 25-second hard cap per platform so a slow/hanging API never blocks the scan.
-        per_platform_timeout = 25.0
+        # Per-platform timeout.  Reddit browses 10+ subreddits and fetches
+        # comments, Instagram search can also be slow — 120s gives each
+        # adapter enough headroom without blocking the scan forever.
+        per_platform_timeout = 120.0
 
         async def _search_one(platform: str) -> list[UnifiedPost]:
             adapter = _get_adapter(platform)

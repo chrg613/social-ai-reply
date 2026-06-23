@@ -17,6 +17,7 @@ old.reddit.com search.json endpoint for keyword search.
 """
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 from datetime import UTC, datetime
@@ -221,7 +222,10 @@ class RedditAdapter(PlatformAdapter):
         all_posts: list[UnifiedPost] = []
         posts_per_sub = max(limit // max(len(self._subreddits), 1), 10)
 
-        for subreddit in self._subreddits:
+        for i, subreddit in enumerate(self._subreddits):
+            # Space out requests to avoid RapidAPI rate limits
+            if i > 0:
+                await asyncio.sleep(1.5)
             try:
                 sub_posts = await self.get_subreddit_posts(
                     subreddit, sort="new", limit=posts_per_sub,
