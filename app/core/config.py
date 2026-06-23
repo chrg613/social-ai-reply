@@ -118,11 +118,11 @@ class Settings(BaseSettings):
     semantic_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
 
     reddit_base_url: str = "https://old.reddit.com"
-    reddit_user_agent: str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    reddit_user_agent: str = "web:signalflow:v1.0 (by /u/SignalFlowBot)"
     reddit_search_provider: str = "auto"
-    # Min seconds between requests to reddit.com hosts. Reddit's public RSS
-    # endpoints tolerate ~1 req/2s; 3s gives a safety margin against 429s.
-    reddit_scrape_min_interval: float = 3.0
+    # Min seconds between requests to reddit.com hosts.  Reddit's public
+    # endpoints are strict about rate limits; 4s keeps us safely under.
+    reddit_scrape_min_interval: float = 4.0
     serpapi_api_key: str | None = None
     bing_search_api_key: str | None = None
     bing_search_url: str = "https://api.bing.microsoft.com/v7.0/search"
