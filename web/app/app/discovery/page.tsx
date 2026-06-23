@@ -106,7 +106,11 @@ export default function DiscoveryPage() {
   }
 
   async function handleGenerateReply(opp: Opportunity) {
-    const draft = await draftOps.generateReplyDraft(opp.id, undefined, { voiceProfileId });
+    const oppPlatform = (opp as Record<string, unknown>).platform as string | undefined;
+    const draft = await draftOps.generateReplyDraft(opp.id, undefined, {
+      voiceProfileId,
+      platform: oppPlatform || "reddit",
+    });
     if (!draft) {
       return;
     }

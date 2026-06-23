@@ -72,10 +72,16 @@ def generate_reply_draft(
     # Verify workspace access
     project = get_project(supabase, workspace["id"], opportunity["project_id"])
 
-    is_valid, _score = revalidate_opportunity(supabase, project, opportunity)
-    if not is_valid:
-        update_opportunity(supabase, opportunity["id"], {"status": "ignored"})
-        raise HTTPException(status_code=422, detail="Opportunity no longer meets the relevance threshold.")
+    # Revalidation uses a Reddit-specific scoring engine (RedditPost model,
+    # topical gate). Non-Reddit opportunities (Twitter, LinkedIn, Instagram)
+    # were already scored during scanning and would always fail the Reddit
+    # revalidation gate. Skip it for them.
+    opp_platform = (opportunity.get("platform") or "reddit").lower()
+    if opp_platform == "reddit":
+        is_valid, _score = revalidate_opportunity(supabase, project, opportunity)
+        if not is_valid:
+            update_opportunity(supabase, opportunity["id"], {"status": "ignored"})
+            raise HTTPException(status_code=422, detail="Opportunity no longer meets the relevance threshold.")
 
     ensure_default_prompts(supabase, project["id"])
     prompts = list_prompt_templates_for_project(supabase, project["id"])
@@ -215,6 +221,8 @@ def list_reply_drafts(
                 "opportunity_subreddit": opp["subreddit_name"],
                 "permalink": opp["permalink"],
                 "body_excerpt": opp.get("body_excerpt", ""),
+                "platform": opp.get("platform", "reddit"),
+                "score": opp.get("score"),
             })
 
     # Sort by created_at descending

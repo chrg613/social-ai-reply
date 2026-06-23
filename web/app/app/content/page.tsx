@@ -81,6 +81,7 @@ interface ReplyDraftRow {
   permalink?: string;
   body_excerpt?: string;
   score?: number;
+  platform?: string;
 }
 
 interface ProjectContext {
@@ -123,7 +124,7 @@ export default function ContentPage() {
     savingPost,
     generateReplyDraft,
     copyToClipboard,
-    copyAndOpenReddit,
+    copyAndOpen,
     markAsPosted: markOpportunityPosted,
     saveReplyDraft: persistReplyDraft,
     savePostDraft: persistPostDraft,
@@ -817,9 +818,9 @@ export default function ContentPage() {
             {selectedReply?.permalink && (
               <Button
                 variant="outline"
-                onClick={() => copyAndOpenReddit(replyContent, selectedReply.permalink || "")}
+                onClick={() => copyAndOpen(replyContent, selectedReply.permalink || "", selectedReply.platform)}
               >
-                Copy &amp; Open Reddit
+                Copy &amp; Open Post
               </Button>
             )}
             {selectedReply && (

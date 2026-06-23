@@ -9,11 +9,13 @@ export async function generateReply(
   opportunityId: number,
   projectId?: number | null,
   promptTemplateId?: number | null,
-  options?: { voice_profile_id?: number | null }
+  options?: { voice_profile_id?: number | null; platform?: string | null; variants?: number }
 ) {
   const body: Record<string, unknown> = { opportunity_id: opportunityId };
   if (promptTemplateId) body.prompt_template_id = promptTemplateId;
   if (options?.voice_profile_id) body.voice_profile_id = options.voice_profile_id;
+  if (options?.platform) body.platform = options.platform;
+  if (options?.variants && options.variants > 1) body.variants = options.variants;
   const qs = projectId ? `?project_id=${projectId}` : "";
   return apiRequest<ReplyDraft>(
     `/v1/drafts/replies${qs}`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }
