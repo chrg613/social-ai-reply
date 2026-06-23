@@ -28,9 +28,7 @@ const PIPELINE_STEPS = [
   { key: "analyzing", label: "Analyzing website" },
   { key: "generating_personas", label: "Generating personas" },
   { key: "discovering_keywords", label: "Discovering keywords" },
-  { key: "finding_subreddits", label: "Finding communities" },
-  { key: "scanning_opportunities", label: "Scanning Social Media" },
-  { key: "scanning_platforms", label: "Scanning Twitter, Instagram, LinkedIn" },
+  { key: "scanning_all", label: "Scanning Social Media" },
   { key: "generating_drafts", label: "Generating drafts" },
 ];
 

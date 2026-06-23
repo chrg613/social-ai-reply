@@ -251,12 +251,12 @@ def run_auto_pipeline_background(
             update_auto_pipeline(db, pipeline_id, {"keywords_generated": len(keywords_data), "progress": 45})
             log.info("Inserted %d new keywords (%d already existed)", new_kw_count, len(keywords_data) - new_kw_count)
 
-        # ── Step 4: Discover Subreddits (45→60%) ────────────────
-        log.info("Step 4/8: Discovering subreddits")
+        # ── Step 4: Discover Communities & Scan All Platforms (45→80%) ──
+        log.info("Step 4/8: Discovering communities and scanning all platforms")
         update_auto_pipeline(db, pipeline_id, {
-            "status": "finding_subreddits",
+            "status": "scanning_all",
             "progress": 50,
-            "current_step": "Discovering relevant subreddits...",
+            "current_step": "Finding communities and scanning all platforms...",
         })
 
         existing_sub_count = len(list_monitored_subreddits_for_project(db, project_id))
@@ -315,9 +315,8 @@ def run_auto_pipeline_background(
         # ── Step 5: Scan Reddit for Opportunities (60→70%) ────────
         log.info("Step 5/8: Scanning Reddit for opportunities")
         update_auto_pipeline(db, pipeline_id, {
-            "status": "scanning_opportunities",
             "progress": 62,
-            "current_step": "Cooling down before scanning (Reddit rate-limit recovery)...",
+            "current_step": "Scanning Reddit posts and comments...",
         })
 
         # Cool down after discovery — Reddit rate-limits aggressively and the
@@ -375,9 +374,8 @@ def run_auto_pipeline_background(
         # continues with whatever Reddit already found.
         log.info("Step 5b/8: Scanning social platforms (Twitter, Instagram, LinkedIn)")
         update_auto_pipeline(db, pipeline_id, {
-            "status": "scanning_platforms",
             "progress": 72,
-            "current_step": "Scanning Twitter, Instagram, LinkedIn for opportunities...",
+            "current_step": "Scanning Twitter, Instagram, LinkedIn...",
         })
 
         platform_opp_found = 0
@@ -397,8 +395,8 @@ def run_auto_pipeline_background(
                     db,
                     proj,
                     platforms=available_platforms,
-                    limit_per_platform=25,
-                    min_score=15,
+                    limit_per_platform=50,
+                    min_score=10,
                 )
                 platform_opp_found = platform_result.get("opportunities_found", 0)
                 platform_error = platform_result.get("error")
@@ -432,15 +430,20 @@ def run_auto_pipeline_background(
         ensure_default_prompts(db, project_id)
         prompts = list_prompt_templates_for_project(db, project_id)
 
-        opportunities = list_opportunities_for_project(db, project_id, status="new", limit=10)
+        opportunities = list_opportunities_for_project(db, project_id, status="new", limit=20)
 
         drafts_count = 0
         for opp in opportunities:
             try:
-                is_valid, _score = revalidate_opportunity(db, proj, opp)
-                if not is_valid:
-                    update_opportunity(db, opp["id"], {"status": "ignored"})
-                    continue
+                # Revalidation uses a Reddit-specific engine (RedditPost model +
+                # topical gate). Non-Reddit opportunities were already scored
+                # during scanning and always fail the Reddit gate — skip them.
+                opp_platform = (opp.get("platform") or "reddit").lower()
+                if opp_platform == "reddit":
+                    is_valid, _score = revalidate_opportunity(db, proj, opp)
+                    if not is_valid:
+                        update_opportunity(db, opp["id"], {"status": "ignored"})
+                        continue
                 content, rationale, _source_prompt = copilot.generate_reply(
                     opp, brand_dict, prompts,
                     platform=opp.get("platform"),
