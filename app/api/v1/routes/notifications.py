@@ -52,10 +52,10 @@ def list_notifications(
     return {
         "items": [
             {
-                "id": n["id"],
-                "title": n["title"],
-                "body": n["body"],
-                "message": n["body"],
+                "id": n.get("id"),
+                "title": n.get("title", ""),
+                "body": n.get("body", ""),
+                "message": n.get("body", ""),
                 "type": n.get("type", "info"),
                 "link": n.get("action_url"),
                 "action_url": n.get("action_url"),

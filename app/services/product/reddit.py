@@ -73,6 +73,25 @@ class RedditPost:
         }
 
 
+@dataclass
+class RedditComment:
+    """A Reddit comment extracted from a post's RSS feed.
+
+    Used for comment-level opportunity discovery — comments where users ask
+    for help, recommendations, or alternatives are high-value opportunities.
+    """
+
+    comment_id: str
+    post_id: str
+    subreddit: str
+    author: str
+    body: str
+    permalink: str
+    score: int
+    created_at: datetime | None
+    parent_post_title: str
+
+
 def _search_keyword_variants(keyword: str) -> list[str]:
     cleaned = keyword.strip().replace('"', "")
     if not cleaned:

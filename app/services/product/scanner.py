@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -26,8 +26,9 @@ if TYPE_CHECKING:
 from app.core.config import get_settings
 from app.services.infrastructure.http_budget import CircuitOpenError
 from app.services.product.discovery import get_project_search_keywords
+from app.services.product.intent_classifier import classify_intent
 from app.services.product.intent_ladder import refine_stages_with_llm, stage_from_intent
-from app.services.product.reddit import RedditPost
+from app.services.product.reddit import RedditComment, RedditPost
 from app.services.product.reddit_discovery import RedditDiscoveryService
 from app.services.product.relevance_v2 import CandidatePost, RelevanceEngine, RelevanceResult
 from app.services.product.scoring import (
@@ -39,10 +40,22 @@ logger = logging.getLogger(__name__)
 
 _MAX_REJECTED_PER_SCAN = 25
 _MAX_PARALLEL_SUBREDDITS = 3
-# Scanner-calibrated semantic floor. The engine's default (0.45) is tuned for
-# the agents pipeline with richer brand context; with TF-IDF embeddings on
-# short Reddit posts it would reject nearly everything the scanner sees.
-_SCAN_SEMANTIC_THRESHOLD = 0.05
+# Hard wall-clock cap for the scan step. Prevents the pipeline from running
+# indefinitely when Reddit rate-limits or the feed scraping is slow.
+_MAX_SCAN_DURATION_SECONDS = 300  # 5 minutes
+# Max posts per subreddit to fetch comments from. Keeps the comment-fetch
+# budget bounded (1 HTTP request per post → max 5 extra requests per sub).
+_MAX_COMMENT_POSTS_PER_SUB = 5
+# Scanner-calibrated semantic floor. TF-IDF on short Reddit posts gives
+# exactly 0.0 cosine similarity for posts lacking shared vocabulary with
+# the brand description. Setting to 0.0 disables the semantic hard-reject
+# entirely, so posts are judged on keywords + intent + freshness instead.
+_SCAN_SEMANTIC_THRESHOLD = 0.0
+# Scanner minimum score. Lower than the global MIN_RELEVANT_OPPORTUNITY_SCORE
+# because RSS feeds lack upvote/comment metadata (both = 0), which penalizes
+# posts that would otherwise score well. 15 keeps obvious noise out while
+# letting borderline-relevant posts surface for human review.
+_SCAN_MIN_SCORE = 15
 
 
 def _engine_brand_profile(brand: dict[str, Any] | None) -> dict[str, Any]:
@@ -77,6 +90,25 @@ def _candidate_from_post(post: RedditPost) -> CandidatePost:
         created_at=post.created_at,
         author=post.author,
         post_url=post.permalink,
+    )
+
+
+def _candidate_from_comment(comment: RedditComment) -> CandidatePost:
+    """Wrap a comment as a CandidatePost for scoring.
+
+    Uses the parent post title as context (title) and the comment body
+    as the main content, since the scorer weights both.
+    """
+    return CandidatePost(
+        title=comment.parent_post_title,
+        body=comment.body,
+        platform="reddit",
+        source_name=comment.subreddit,
+        upvotes=comment.score,
+        comments_count=0,
+        created_at=comment.created_at,
+        author=comment.author,
+        post_url=comment.permalink,
     )
 
 
@@ -140,7 +172,7 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
     if not active_subreddits:
         raise HTTPException(status_code=400, detail="Add monitored subreddits before scanning.")
 
-    search_keywords = get_project_search_keywords(db, project, limit=12)
+    search_keywords = get_project_search_keywords(db, project, limit=20)
     if not search_keywords:
         raise HTTPException(status_code=400, detail="Add more specific discovery keywords before scanning.")
 
@@ -166,16 +198,23 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
         rejected_saved = 0
         completed_at: str | None = None
         cutoff = datetime.now(UTC) - timedelta(hours=payload.search_window_hours)
-        effective_min_score = max(payload.min_score, MIN_RELEVANT_OPPORTUNITY_SCORE)
+        effective_min_score = max(payload.min_score, _SCAN_MIN_SCORE)
         per_subreddit_errors: list[str] = []
         fatal_error = False
 
         engine: RelevanceEngine | None = None
-        if not get_settings().use_legacy_scoring:
+        use_legacy = get_settings().use_legacy_scoring
+        if not use_legacy:
             engine = RelevanceEngine(
                 relevance_threshold=effective_min_score,
                 semantic_threshold=_SCAN_SEMANTIC_THRESHOLD,
             )
+        # Always create an engine for comment scoring (legacy scorer expects
+        # RedditPost objects, but comments use CandidatePost).
+        comment_engine = engine or RelevanceEngine(
+            relevance_threshold=effective_min_score,
+            semantic_threshold=_SCAN_SEMANTIC_THRESHOLD,
+        )
         engine_brand = _engine_brand_profile(brand)
         engine_kw = _engine_keywords(search_keywords)
         # Kept opportunities queued for the optional LLM buying-stage pass.
@@ -206,17 +245,32 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
                 local_reddit.close()
 
         scan_results: list[_SubredditScanResult] = []
-        with ThreadPoolExecutor(max_workers=min(len(active_subreddits), _MAX_PARALLEL_SUBREDDITS)) as pool:
-            future_to_sub = {
-                pool.submit(_scan_one_subreddit, sub): sub
-                for sub in active_subreddits
-            }
-            for future in as_completed(future_to_sub):
-                scan_results.append(future.result())
-                try:
-                    update_scan_run(db, run["id"], {"subreddits_scanned": len(scan_results)})
-                except Exception:  # noqa: BLE001 — progress reporting must not kill the scan
-                    logger.warning("Failed to update scan progress for run %s", run["id"])
+        scan_deadline = time.monotonic() + _MAX_SCAN_DURATION_SECONDS
+        # Sequential queue with cool-down between subreddits.
+        # Parallel execution hammered Reddit (3 subs × 3 HTTP calls each = 9
+        # concurrent requests), triggering instant 429 on all of them.
+        # Sequential scanning lets each subreddit's requests finish before
+        # starting the next, staying under Reddit's ~10 req/min limit.
+        inter_subreddit_delay = 3.0  # seconds between subreddits
+        for i, sub in enumerate(active_subreddits):
+            if time.monotonic() > scan_deadline:
+                logger.warning(
+                    "Scan hit %ds time cap — stopping with %d/%d subreddits scanned",
+                    _MAX_SCAN_DURATION_SECONDS, len(scan_results), len(active_subreddits),
+                )
+                break
+
+            # Cool-down between subreddits (skip before the first one)
+            if i > 0:
+                time.sleep(inter_subreddit_delay)
+
+            result = _scan_one_subreddit(sub)
+            scan_results.append(result)
+
+            try:
+                update_scan_run(db, run["id"], {"subreddits_scanned": len(scan_results)})
+            except Exception:  # noqa: BLE001 — progress reporting must not kill the scan
+                logger.warning("Failed to update scan progress for run %s", run["id"])
 
         subreddit_map = {s["name"]: s for s in active_subreddits}
         for result in scan_results:
@@ -254,11 +308,19 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
                 else:
                     score = score_post(post, brand, subreddit, search_keywords, rules, feedback_records=feedback_records)
                     keep = score.eligible and score.total >= effective_min_score
+                    full_text = f"{post.title} {post.body}"
+                    intent_result = classify_intent(full_text, brand_profile=brand)
+                    stage_name, stage_conf = stage_from_intent(intent_result.intent)
                     score_payload = {
                         "score": score.total,
                         "score_reasons": score.reasons,
                         "keyword_hits": score.keyword_hits,
                         "rule_risk": score.rule_risk,
+                        "intent": intent_result.intent,
+                        "buying_stage": stage_name,
+                        "scoring_breakdown": {},
+                        "semantic_similarity": 0.0,
+                        "risk_flags": [],
                     }
 
                 # Dict lookup instead of per-post DB query
@@ -285,6 +347,7 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
                             "title": post.title,
                             "author": post.author,
                             "subreddit_name": subreddit["name"],
+                            "platform": "reddit",
                             **payload_data,
                         })
                         opp_id = created["id"]
@@ -304,6 +367,7 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
                         "title": post.title,
                         "author": post.author,
                         "subreddit_name": subreddit["name"],
+                        "platform": "reddit",
                         "body_excerpt": post.body[:1200],
                         "permalink": post.permalink,
                         "status": "rejected",
@@ -318,6 +382,72 @@ def run_scan(db: Client, project: dict, payload: ScanRequest, scan_run_id: str |
                 })
             except Exception:  # noqa: BLE001
                 logger.warning("Failed to update scan progress for run %s", run["id"])
+
+            # ── Comment-level opportunity discovery ──────────────────
+            # Fetch comments from the top N posts (by score) and score them.
+            # One HTTP request per post yields ~15-25 comments.
+            if time.monotonic() < scan_deadline:
+                # Pick the top posts by relevance score (or post score if no engine score)
+                scored_posts = sorted(
+                    result.posts,
+                    key=lambda p: p.score,
+                    reverse=True,
+                )[:_MAX_COMMENT_POSTS_PER_SUB]
+
+                comment_reddit = RedditDiscoveryService()
+                try:
+                    for ci, post in enumerate(scored_posts):
+                        if time.monotonic() > scan_deadline:
+                            break
+                        # Space out comment-fetch requests to avoid 429
+                        if ci > 0:
+                            time.sleep(2.0)
+                        comments = comment_reddit.fetch_post_comments(
+                            post.permalink,
+                            post_id=post.post_id,
+                            subreddit=post.subreddit,
+                            parent_post_title=post.title,
+                            limit=15,
+                        )
+                        for comment in comments:
+                            # Use the comment's unique ID as the reddit_post_id
+                            comment_reddit_id = f"comment_{comment.comment_id}"
+                            existing_comment_opp = existing_opps.get(comment_reddit_id)
+                            if existing_comment_opp:
+                                continue  # Already tracked
+
+                            relevance = comment_engine.score(
+                                _candidate_from_comment(comment),
+                                engine_brand,
+                                engine_kw,
+                                source_meta=subreddit,
+                                source_rules=rules,
+                                feedback_records=feedback_records,
+                            )
+                            if relevance.should_keep:
+                                comment_payload = _result_payload(relevance)
+                                created_opp = create_opportunity(db, {
+                                    "project_id": project["id"],
+                                    "scan_run_id": run["id"],
+                                    "reddit_post_id": comment_reddit_id,
+                                    "title": f"[Comment] {post.title}",
+                                    "author": comment.author,
+                                    "subreddit_name": subreddit["name"],
+                                    "platform": "reddit",
+                                    "body_excerpt": comment.body[:1200],
+                                    "permalink": comment.permalink,
+                                    "status": "new",
+                                    "source_type": "comment",
+                                    **comment_payload,
+                                })
+                                opportunities_found += 1
+                                stage_refine_queue.append({
+                                    "index": created_opp["id"],
+                                    "title": post.title,
+                                    "body": comment.body[:800],
+                                })
+                finally:
+                    comment_reddit.close()
 
         # ── Optional LLM buying-stage refinement for kept opportunities ──
         if stage_refine_queue:
@@ -461,6 +591,7 @@ def _hydrate_scan_run_response(
     hydrated = dict(record)
     hydrated.setdefault("search_window_hours", search_window_hours)
     hydrated.setdefault("posts_scanned", posts_scanned)
+    hydrated.setdefault("opportunities_found", 0)
     if completed_at and not hydrated.get("completed_at"):
         hydrated["completed_at"] = completed_at
     return hydrated

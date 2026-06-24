@@ -13,16 +13,26 @@ export interface OpportunitySource {
 
 /** Human-readable label for where an opportunity came from. */
 export function sourceLabel(source: OpportunitySource): string {
-  if (source.subreddit_name) {
-    return `r/${source.subreddit_name}`;
+  const platform = (source.platform || "reddit").toLowerCase();
+
+  // Reddit: always prefer subreddit_name with r/ prefix
+  if (platform === "reddit") {
+    return source.subreddit_name ? `r/${source.subreddit_name}` : (source.source_name || "Reddit");
   }
+
+  // Twitter / X: use @ prefix
+  if (platform === "twitter" || platform === "x") {
+    return source.source_name ? `@${source.source_name}` : "Twitter/X";
+  }
+
+  // LinkedIn, Instagram, etc.: plain source name
   return source.source_name || source.platform || "Unknown source";
 }
 
-/** Platform key for icon rendering (defaults to reddit for subreddit-based rows). */
+/** Platform key for icon rendering (defaults to "reddit" when platform is falsy). */
 export function sourcePlatform(source: OpportunitySource): string {
   if (source.platform) {
     return source.platform;
   }
-  return source.subreddit_name ? "reddit" : "default";
+  return "reddit";
 }

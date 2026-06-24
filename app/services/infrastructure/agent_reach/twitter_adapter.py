@@ -1,6 +1,6 @@
 """twitter-cli adapter — translates twitter-cli JSON output into SocialPost objects.
 
-Bridges Agent-Reach's twitter-cli output format to RedditFlow's
+Bridges Agent-Reach's twitter-cli output format to SignalFlow's
 SocialPost dataclass for the multi-platform discovery pipeline.
 """
 

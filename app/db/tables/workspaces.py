@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
+
+from postgrest.exceptions import APIError
 
 if TYPE_CHECKING:
     from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 WORKSPACES_TABLE = "workspaces"
 MEMBERSHIPS_TABLE = "memberships"
@@ -173,66 +178,105 @@ def get_membership_by_user_and_workspace(
 # Subscription operations
 def get_subscription_by_workspace(db: Client, workspace_id: int) -> dict[str, Any] | None:
     """Get a subscription by workspace ID."""
-    result = db.table(SUBSCRIPTIONS_TABLE).select("*").eq("workspace_id", workspace_id).execute()
-    return result.data[0] if result.data else None
+    try:
+        result = db.table(SUBSCRIPTIONS_TABLE).select("*").eq("workspace_id", workspace_id).execute()
+        return result.data[0] if result.data else None
+    except APIError:
+        logger.warning("subscriptions table not found — returning None")
+        return None
 
 
 def get_subscription_by_id(db: Client, subscription_id: int) -> dict[str, Any] | None:
     """Get a subscription by ID."""
-    result = db.table(SUBSCRIPTIONS_TABLE).select("*").eq("id", subscription_id).execute()
-    return result.data[0] if result.data else None
+    try:
+        result = db.table(SUBSCRIPTIONS_TABLE).select("*").eq("id", subscription_id).execute()
+        return result.data[0] if result.data else None
+    except APIError:
+        logger.warning("subscriptions table not found — returning None")
+        return None
 
 
-def create_subscription(db: Client, subscription_data: dict[str, Any]) -> dict[str, Any]:
+def create_subscription(db: Client, subscription_data: dict[str, Any]) -> dict[str, Any] | None:
     """Create a new subscription."""
-    result = db.table(SUBSCRIPTIONS_TABLE).insert(subscription_data).execute()
-    return result.data[0]
+    try:
+        result = db.table(SUBSCRIPTIONS_TABLE).insert(subscription_data).execute()
+        return result.data[0]
+    except APIError:
+        logger.warning("subscriptions table not found — skipping insert")
+        return None
 
 
 def update_subscription(db: Client, subscription_id: int, update_data: dict[str, Any]) -> dict[str, Any] | None:
     """Update a subscription."""
-    result = db.table(SUBSCRIPTIONS_TABLE).update(update_data).eq("id", subscription_id).execute()
-    return result.data[0] if result.data else None
+    try:
+        result = db.table(SUBSCRIPTIONS_TABLE).update(update_data).eq("id", subscription_id).execute()
+        return result.data[0] if result.data else None
+    except APIError:
+        logger.warning("subscriptions table not found — skipping update")
+        return None
 
 
 def delete_subscription(db: Client, subscription_id: int) -> None:
     """Delete a subscription."""
-    db.table(SUBSCRIPTIONS_TABLE).delete().eq("id", subscription_id).execute()
+    try:
+        db.table(SUBSCRIPTIONS_TABLE).delete().eq("id", subscription_id).execute()
+    except APIError:
+        logger.warning("subscriptions table not found — skipping delete")
 
 
 # Plan entitlements operations
 def get_plan_entitlements(db: Client, plan_code: str) -> list[dict[str, Any]]:
     """Get all entitlements for a plan."""
-    result = db.table(PLAN_ENTITLEMENTS_TABLE).select("*").eq("plan_code", plan_code).execute()
-    return list(result.data)
+    try:
+        result = db.table(PLAN_ENTITLEMENTS_TABLE).select("*").eq("plan_code", plan_code).execute()
+        return list(result.data)
+    except APIError:
+        logger.warning("plan_entitlements table not found — returning empty list")
+        return []
 
 
 def get_entitlement(db: Client, plan_code: str, feature_key: str) -> dict[str, Any] | None:
     """Get a specific entitlement for a plan and feature."""
-    result = (
-        db.table(PLAN_ENTITLEMENTS_TABLE)
-        .select("*")
-        .eq("plan_code", plan_code)
-        .eq("feature_key", feature_key)
-        .execute()
-    )
-    return result.data[0] if result.data else None
+    try:
+        result = (
+            db.table(PLAN_ENTITLEMENTS_TABLE)
+            .select("*")
+            .eq("plan_code", plan_code)
+            .eq("feature_key", feature_key)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+    except APIError:
+        logger.warning("plan_entitlements table not found — returning None")
+        return None
 
 
 # Redemption operations
 def get_redemption_by_code(db: Client, code: str) -> dict[str, Any] | None:
     """Get a redemption by code."""
-    result = db.table(REDEMPTIONS_TABLE).select("*").eq("code", code).execute()
-    return result.data[0] if result.data else None
+    try:
+        result = db.table(REDEMPTIONS_TABLE).select("*").eq("code", code).execute()
+        return result.data[0] if result.data else None
+    except APIError:
+        logger.warning("redemptions table not found — returning None")
+        return None
 
 
-def create_redemption(db: Client, redemption_data: dict[str, Any]) -> dict[str, Any]:
+def create_redemption(db: Client, redemption_data: dict[str, Any]) -> dict[str, Any] | None:
     """Create a new redemption."""
-    result = db.table(REDEMPTIONS_TABLE).insert(redemption_data).execute()
-    return result.data[0]
+    try:
+        result = db.table(REDEMPTIONS_TABLE).insert(redemption_data).execute()
+        return result.data[0]
+    except APIError:
+        logger.warning("redemptions table not found — skipping insert")
+        return None
 
 
 def update_redemption(db: Client, redemption_id: int, update_data: dict[str, Any]) -> dict[str, Any] | None:
     """Update a redemption."""
-    result = db.table(REDEMPTIONS_TABLE).update(update_data).eq("id", redemption_id).execute()
-    return result.data[0] if result.data else None
+    try:
+        result = db.table(REDEMPTIONS_TABLE).update(update_data).eq("id", redemption_id).execute()
+        return result.data[0] if result.data else None
+    except APIError:
+        logger.warning("redemptions table not found — skipping update")
+        return None

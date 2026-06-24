@@ -270,7 +270,7 @@ def export_workspace_data(
     # [a-zA-Z0-9._-] is collapsed to a hyphen; strip leading/trailing
     # dots to block "..".
     sanitized_identifier = re.sub(r"[^A-Za-z0-9._-]", "-", raw_identifier).strip("-.") or "workspace"
-    filename = f"redditflow-export-{sanitized_identifier}.json"
+    filename = f"signalflow-export-{sanitized_identifier}.json"
     return Response(
         content=body,
         media_type="application/json",

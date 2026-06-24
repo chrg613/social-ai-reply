@@ -23,13 +23,11 @@ from app.db.tables.projects import (
     update_brand_profile,
 )
 from app.db.tables.system import create_notification
-from app.schemas.v1.discovery import ScanRequest
 from app.services.product.copilot import ProductCopilot
 from app.services.product.discovery import discover_and_store_subreddits
-from app.services.product.scanner import revalidate_opportunity, run_scan
-from app.services.product.scoring import MIN_RELEVANT_OPPORTUNITY_SCORE
+from app.services.product.scanner import revalidate_opportunity
 
-log = logging.getLogger("redditflow.pipeline")
+log = logging.getLogger("signalflow.pipeline")
 TARGET_PIPELINE_SUBREDDITS = 10
 TARGET_PIPELINE_KEYWORDS = 10
 _LLM_RETRY_DELAY_SECONDS = 5.0
@@ -121,6 +119,7 @@ def run_auto_pipeline_background(
     project_id: int,
     workspace_id: int,
     user_id: int,
+    time_filter: str = "week",
 ):
     from app.db.supabase_client import get_supabase_client
     db = get_supabase_client()
@@ -139,7 +138,7 @@ def run_auto_pipeline_background(
             return
 
         copilot = ProductCopilot()
-        log.info("Step 1/7: Analyzing website %s", website_url)
+        log.info("Step 1/8: Analyzing website %s", website_url)
 
         # ── Step 1: Analyze Website (0→15%) ─────────────────────
         update_auto_pipeline(db, pipeline_id, {
@@ -189,7 +188,6 @@ def run_auto_pipeline_background(
             else:
                 brand = create_brand_profile(db, {
                     "project_id": project_id,
-                    "website_url": website_url,
                     **analysis_fields,
                 })
                 log.info("Created new BrandProfile for project %s", project_id)
@@ -202,7 +200,7 @@ def run_auto_pipeline_background(
         proj["brand_profile"] = brand
 
         # ── Step 2: Generate Personas (15→30%) ──────────────────
-        log.info("Step 2/7: Generating personas")
+        log.info("Step 2/8: Generating personas")
         update_auto_pipeline(db, pipeline_id, {
             "status": "generating_personas",
             "progress": 20,
@@ -238,12 +236,13 @@ def run_auto_pipeline_background(
                     "goals": p_data.get("goals", []),
                     "triggers": p_data.get("triggers", []),
                     "preferred_subreddits": p_data.get("preferred_subreddits", []),
-                    "source": "generated",
+                    "source": p_data.get("source", "generated"),
+                    "is_active": True,
                 })
             update_auto_pipeline(db, pipeline_id, {"personas_generated": len(personas_data), "progress": 30})
 
         # ── Step 3: Discover Keywords (30→45%) ──────────────────
-        log.info("Step 3/7: Discovering keywords")
+        log.info("Step 3/8: Discovering keywords")
         update_auto_pipeline(db, pipeline_id, {
             "status": "discovering_keywords",
             "progress": 35,
@@ -252,16 +251,34 @@ def run_auto_pipeline_background(
 
         personas_list = list_personas_for_project(db, project_id)
         from app.db.tables.discovery import create_discovery_keyword, list_discovery_keywords_for_project
-        existing_kw = {row["keyword"] for row in list_discovery_keywords_for_project(db, project_id)}
+        existing_kw_rows = list_discovery_keywords_for_project(db, project_id)
+
+        # On re-runs, deactivate old auto-generated keywords so fresh ones replace them.
+        # Manual keywords (source != 'generated') are always preserved.
+        stale_rationale_prefixes = ("Domain-specific keyword", "Heuristic keyword")
+        stale_generated = [
+            row for row in existing_kw_rows
+            if row.get("source") == "generated"
+            and any((row.get("rationale") or "").startswith(p) for p in stale_rationale_prefixes)
+        ]
+        if stale_generated:
+            from app.db.tables.discovery import update_discovery_keyword
+            for row in stale_generated:
+                update_discovery_keyword(db, row["id"], {"is_active": False})
+            log.info("Deactivated %d stale generated keywords", len(stale_generated))
+            # Refresh the active keyword set after deactivation
+            existing_kw_rows = list_discovery_keywords_for_project(db, project_id)
+
+        existing_kw = {row["keyword"] for row in existing_kw_rows}
 
         if len(existing_kw) >= TARGET_PIPELINE_KEYWORDS:
-            log.info("Project %s already has %d keywords — skipping generation", project_id, len(existing_kw))
+            log.info("Project %s already has %d quality keywords — skipping generation", project_id, len(existing_kw))
             update_auto_pipeline(db, pipeline_id, {"keywords_generated": len(existing_kw), "progress": 45})
         else:
             try:
                 keywords_data = _retry_once(
                     "Keyword generation",
-                    lambda: copilot.generate_keywords(brand_dict, personas_list, count=15),
+                    lambda: copilot.generate_keywords(brand_dict, personas_list),
                 )
                 log.info("Generated %d keywords", len(keywords_data))
             except Exception as e:
@@ -276,24 +293,36 @@ def run_auto_pipeline_background(
                 if k_data.keyword in existing_kw:
                     log.info("Keyword '%s' already exists — skipping", k_data.keyword)
                     continue
-                create_discovery_keyword(db, {
+                kw_row: dict = {
                     "project_id": project_id,
                     "keyword": k_data.keyword,
                     "rationale": k_data.rationale,
                     "priority_score": k_data.priority_score,
+                    "category": k_data.category,
                     "source": "generated",
-                })
+                    "is_active": True,
+                }
+                try:
+                    create_discovery_keyword(db, kw_row)
+                except Exception:
+                    # category column may not exist yet — retry without it
+                    kw_row.pop("category", None)
+                    try:
+                        create_discovery_keyword(db, kw_row)
+                    except Exception as kw_err:
+                        log.warning("Failed to insert keyword '%s': %s", k_data.keyword, kw_err)
+                        continue
                 existing_kw.add(k_data.keyword)
                 new_kw_count += 1
             update_auto_pipeline(db, pipeline_id, {"keywords_generated": len(keywords_data), "progress": 45})
             log.info("Inserted %d new keywords (%d already existed)", new_kw_count, len(keywords_data) - new_kw_count)
 
-        # ── Step 4: Discover Subreddits (45→60%) ────────────────
-        log.info("Step 4/7: Discovering subreddits")
+        # ── Step 4: Discover Communities & Scan All Platforms (45→80%) ──
+        log.info("Step 4/8: Discovering communities and scanning all platforms")
         update_auto_pipeline(db, pipeline_id, {
-            "status": "finding_subreddits",
+            "status": "scanning_all",
             "progress": 50,
-            "current_step": "Discovering relevant subreddits...",
+            "current_step": "Finding communities and scanning all platforms...",
         })
 
         existing_sub_count = len(list_monitored_subreddits_for_project(db, project_id))
@@ -314,80 +343,162 @@ def run_auto_pipeline_background(
                     existing_sub_count,
                 )
         except Exception as e:
-            log.error("Subreddit discovery FAILED: %s\n%s", e, traceback.format_exc())
-            update_auto_pipeline(db, pipeline_id, {
-                "status": "failed",
-                "error_message": f"Subreddit discovery failed: {str(e)[:500]}",
-                "completed_at": datetime.now(UTC).isoformat(),
-            })
-            return
+            log.error("Subreddit discovery FAILED (non-fatal, continuing with existing): %s\n%s", e, traceback.format_exc())
+            discovered_subreddits = []
 
         if not discovered_subreddits and subreddits_to_discover > 0:
             log.warning("Subreddit discovery returned 0 results for project %s — continuing with existing subreddits", project_id)
 
+        total_subreddits = existing_sub_count + len(discovered_subreddits)
         update_auto_pipeline(db, pipeline_id, {
-            "subreddits_found": existing_sub_count + len(discovered_subreddits),
+            "subreddits_found": total_subreddits,
             "progress": 60,
         })
         log.info("Discovered %d new subreddits (%d already existed)", len(discovered_subreddits), existing_sub_count)
 
-        # ── Step 5: Scan for Opportunities (60→75%) ─────────────
-        log.info("Step 5/7: Scanning Reddit for opportunities")
+        # If we still have zero subreddits, the scan will fail — bail out early
+        # with a clear message instead of letting run_scan raise a confusing 400.
+        if total_subreddits == 0:
+            error_msg = (
+                "No subreddits could be discovered. This usually means Reddit's public "
+                "search is temporarily rate-limiting requests from this server. Please add "
+                "subreddits manually from the Discovery page, or try again in a few minutes."
+            )
+            log.error("Pipeline aborting: %s", error_msg)
+            update_auto_pipeline(db, pipeline_id, {
+                "status": "failed",
+                "error_message": error_msg,
+                "completed_at": datetime.now(UTC).isoformat(),
+            })
+            create_notification(db, {
+                "workspace_id": workspace_id,
+                "type": "pipeline_error",
+                "title": "Pipeline: No subreddits found",
+                "message": error_msg,
+            })
+            return
+
+        # ── Step 5: Scan All Platforms (60→80%) ────────────────────
+        # Unified scan using RapidAPI adapters for Reddit, Twitter,
+        # Instagram, and LinkedIn.  Reddit browses ALL monitored
+        # subreddits via the RapidAPI reddit34 adapter + fetches
+        # comments for top posts.
+        log.info("Step 5/8: Scanning all platforms for opportunities")
         update_auto_pipeline(db, pipeline_id, {
-            "status": "scanning_opportunities",
-            "progress": 65,
-            "current_step": "Scanning Reddit for opportunities...",
+            "progress": 62,
+            "status": "scanning_all",
+            "current_step": "Scanning Reddit, Twitter, Instagram, LinkedIn...",
         })
 
-        opp_found = 0
+        total_opp_found = 0
         try:
-            scan_req = ScanRequest(
-                project_id=project_id,
-                search_window_hours=72,
-                max_posts_per_subreddit=15,
-                min_score=MIN_RELEVANT_OPPORTUNITY_SCORE,
+            from app.services.product.platform_scanner import run_platform_scan
+
+            available_platforms = ["reddit"]  # Reddit always included
+            from app.core.config import get_settings as _get_settings
+            if _get_settings().rapidapi_key:
+                available_platforms.extend(["twitter", "instagram", "linkedin"])
+            else:
+                log.info("RAPIDAPI_KEY not set — scanning Reddit only")
+
+            platform_result = run_platform_scan(
+                db,
+                proj,
+                platforms=available_platforms,
+                limit_per_platform=50,
+                min_score=10,
+                time_filter=time_filter,
             )
-            scan_run = run_scan(db, proj, scan_req)
-            if scan_run.get("fatal_error"):
-                raise RuntimeError(scan_run.get("error_message") or "Opportunity scan could not access Reddit.")
-            primary_opp_found = scan_run["opportunities_found"]
-            opp_found = primary_opp_found
-            # Fallback scan: when the narrow 72-hour window yields nothing,
-            # widen the time horizon to 30 days AND drop the score floor so
-            # the user gets *something* to review. The previous
-            # `max(MIN - 10, 45)` expression was a bug — it RAISED the floor
-            # above MIN (35 → 45), which made the fallback stricter than the
-            # primary scan. We now use a sensible lower floor (15) so the
-            # fallback is genuinely looser.
-            # Low-yield runs should trigger the broader fallback too.
-            # Stopping at 2 or 3 opportunities still feels broken to users.
-            if opp_found <= 3:
-                fallback_scan_req = ScanRequest(
-                    project_id=project_id,
-                    search_window_hours=720,
-                    max_posts_per_subreddit=25,
-                    min_score=max(MIN_RELEVANT_OPPORTUNITY_SCORE - 10, 15),
+            total_opp_found = platform_result.get("opportunities_found", 0)
+            platform_error = platform_result.get("error")
+            if platform_error:
+                log.warning("Platform scan returned error (non-fatal): %s", platform_error)
+            else:
+                log.info(
+                    "Multi-platform scan complete — %d opportunities from %s",
+                    total_opp_found,
+                    ", ".join(available_platforms),
                 )
-                fallback_scan_run = run_scan(db, proj, fallback_scan_req)
-                if fallback_scan_run.get("fatal_error"):
-                    raise RuntimeError(fallback_scan_run.get("error_message") or "Opportunity scan could not access Reddit.")
-                opp_found = primary_opp_found + fallback_scan_run["opportunities_found"]
-            log.info("Scan complete — %d opportunities found", opp_found)
         except Exception as e:
-            log.error("Scan step failed: %s\n%s", e, traceback.format_exc())
+            log.error("Platform scan failed: %s\n%s", e, traceback.format_exc())
             update_auto_pipeline(db, pipeline_id, {
                 "status": "failed",
                 "error_message": f"Opportunity scan failed: {str(e)[:500]}",
                 "completed_at": datetime.now(UTC).isoformat(),
             })
             return
-        update_auto_pipeline(db, pipeline_id, {"opportunities_found": opp_found, "progress": 75})
 
-        # ── Step 6: Generate Drafts (75→95%) ────────────────────
-        log.info("Step 6/7: Generating reply drafts")
+        update_auto_pipeline(db, pipeline_id, {
+            "opportunities_found": total_opp_found,
+            "progress": 80,
+            "current_step": f"Found {total_opp_found} opportunities across all platforms",
+        })
+
+        # ── Step 5c: Check Opportunities (80→83%) ────────────────
+        log.info("Step 5c/8: Checking opportunities")
+        update_auto_pipeline(db, pipeline_id, {
+            "status": "checking_opportunities",
+            "progress": 82,
+            "current_step": f"Checking {total_opp_found} opportunities for relevance...",
+        })
+
+        # ── Step 5d: Competitor Intelligence (83→85%) ─────────────
+        log.info("Step 5d/8: Competitor intelligence scan")
+        update_auto_pipeline(db, pipeline_id, {
+            "status": "analyzing_competitors",
+            "progress": 83,
+            "current_step": "Analyzing competitor mentions...",
+        })
+        try:
+            import asyncio
+
+            from app.services.product.competitor_intel import (
+                get_project_competitors,
+                process_competitor_opportunities,
+            )
+
+            competitors = get_project_competitors(db, project_id)
+            if competitors:
+                # Build post dicts from the scanned opportunities for competitor detection
+                opps_for_comp = list_opportunities_for_project(db, project_id, limit=100)
+                post_dicts = [
+                    {
+                        "title": o.get("title", ""),
+                        "body": o.get("body_text", ""),
+                        "selftext": o.get("body_text", ""),
+                        "platform": o.get("platform", "reddit"),
+                        "url": o.get("reddit_post_url") or o.get("post_url", ""),
+                        "opportunity_id": o.get("id"),
+                    }
+                    for o in opps_for_comp
+                ]
+                # Create a fresh event loop for the async competitor analysis.
+                # FastAPI's BackgroundTask may already have a running loop,
+                # so asyncio.get_event_loop().run_until_complete() would crash.
+                loop = asyncio.new_event_loop()
+                try:
+                    comp_mentions = loop.run_until_complete(
+                        process_competitor_opportunities(db, project_id, post_dicts, competitors)
+                    )
+                finally:
+                    loop.close()
+                log.info("Competitor intel: %d mentions detected", len(comp_mentions))
+                update_auto_pipeline(db, pipeline_id, {
+                    "progress": 85,
+                    "current_step": f"Found {len(comp_mentions)} competitor mentions",
+                })
+            else:
+                log.info("No competitors configured — skipping competitor intel")
+                update_auto_pipeline(db, pipeline_id, {"progress": 85})
+        except Exception as e:
+            log.warning("Competitor intel step failed (non-fatal): %s", e)
+            update_auto_pipeline(db, pipeline_id, {"progress": 85})
+
+        # ── Step 6: Generate Drafts (85→95%) ────────────────────
+        log.info("Step 6/8: Generating reply drafts")
         update_auto_pipeline(db, pipeline_id, {
             "status": "generating_drafts",
-            "progress": 80,
+            "progress": 85,
             "current_step": "Generating reply drafts...",
         })
 
@@ -395,22 +506,29 @@ def run_auto_pipeline_background(
         ensure_default_prompts(db, project_id)
         prompts = list_prompt_templates_for_project(db, project_id)
 
-        opportunities = list_opportunities_for_project(db, project_id, status="new", limit=10)
+        opportunities = list_opportunities_for_project(db, project_id, status="new", limit=20)
 
         drafts_count = 0
         for opp in opportunities:
             try:
-                is_valid, _score = revalidate_opportunity(db, proj, opp)
-                if not is_valid:
-                    update_opportunity(db, opp["id"], {"status": "ignored"})
-                    continue
-                content, rationale, source_prompt = copilot.generate_reply(opp, brand_dict, prompts)
+                # Revalidation uses a Reddit-specific engine (RedditPost model +
+                # topical gate). Non-Reddit opportunities were already scored
+                # during scanning and always fail the Reddit gate — skip them.
+                opp_platform = (opp.get("platform") or "reddit").lower()
+                if opp_platform == "reddit":
+                    is_valid, _score = revalidate_opportunity(db, proj, opp)
+                    if not is_valid:
+                        update_opportunity(db, opp["id"], {"status": "ignored"})
+                        continue
+                content, rationale, _source_prompt = copilot.generate_reply(
+                    opp, brand_dict, prompts,
+                    platform=opp.get("platform"),
+                )
                 create_reply_draft(db, {
                     "project_id": project_id,
                     "opportunity_id": opp["id"],
                     "content": content,
                     "rationale": rationale,
-                    "source_prompt": source_prompt,
                 })
                 update_opportunity(db, opp["id"], {"status": "drafting"})
                 drafts_count += 1
@@ -421,7 +539,7 @@ def run_auto_pipeline_background(
         log.info("Generated %d drafts for %d opportunities", drafts_count, len(opportunities))
 
         # ── Step 7: Finalize (95→100%) ──────────────────────────
-        log.info("Step 7/7: Finalizing sales package")
+        log.info("Step 7/8: Finalizing sales package")
         update_auto_pipeline(db, pipeline_id, {
             "current_step": "Finalizing sales package...",
         })

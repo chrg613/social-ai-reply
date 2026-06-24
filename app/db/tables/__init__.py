@@ -43,6 +43,15 @@ from app.db.tables.campaigns import (
     update_published_post,
 )
 
+# Competitors
+from app.db.tables.competitors import (
+    count_competitor_mentions,
+    create_competitor_mention,
+    get_competitor_mention_by_opportunity,
+    get_competitor_stats,
+    list_competitor_mentions,
+)
+
 # Content
 from app.db.tables.content import (
     create_post_draft,
@@ -313,6 +322,12 @@ __all__ = [
     "delete_prompt_template",
     "list_prompt_templates_for_project",
     "ensure_default_prompts_exist",
+    # Competitors
+    "create_competitor_mention",
+    "list_competitor_mentions",
+    "get_competitor_mention_by_opportunity",
+    "get_competitor_stats",
+    "count_competitor_mentions",
     # Discovery
     "get_persona_by_id",
     "create_persona",

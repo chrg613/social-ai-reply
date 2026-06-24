@@ -1,4 +1,4 @@
-"""Services module for RedditFlow application.
+"""Services module for SignalFlow application.
 
 Provides business logic services organized by domain.
 """

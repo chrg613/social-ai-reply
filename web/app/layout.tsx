@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "RedditFlow",
+  title: "SignalFlow",
   description:
     "AI visibility, community engagement, and content workflows for brands building authority across modern discovery channels.",
 };

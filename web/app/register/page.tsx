@@ -124,7 +124,7 @@ function RegisterForm() {
     <AuthLayout>
         <div className="mb-8 md:hidden">
           <Link href="/" className="text-xl font-bold text-primary">
-            RedditFlow
+            SignalFlow
           </Link>
         </div>
         
@@ -133,7 +133,7 @@ function RegisterForm() {
               Create your account
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Get started with RedditFlow for free
+              Get started with SignalFlow for free
             </p>
           </div>
 

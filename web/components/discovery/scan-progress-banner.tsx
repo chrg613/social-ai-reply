@@ -54,7 +54,8 @@ export function ScanProgressBanner({ scanRun, onRefresh }: ScanProgressBannerPro
           <div className="min-w-0">
             <p className="text-sm font-medium">Scan finished with issues</p>
             <p className="text-xs text-muted-foreground">
-              {scanRun.error_message || "The scan did not complete successfully."}
+              {(scanRun.error_message || "The scan did not complete successfully.")
+                .replace(/^\d{3}:\s*/, "")}
             </p>
           </div>
         </CardContent>

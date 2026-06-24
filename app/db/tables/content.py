@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 REPLY_DRAFTS_TABLE = "reply_drafts"
 POST_DRAFTS_TABLE = "post_drafts"

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/sheet";
 
 interface SheetPanelProps {
-  title: string;
+  title: ReactNode;
   description?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;

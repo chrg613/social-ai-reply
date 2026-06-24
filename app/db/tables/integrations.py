@@ -82,7 +82,7 @@ def list_reddit_accounts_for_workspace(db: Client, workspace_id: int) -> list[di
         db.table(REDDIT_ACCOUNTS_TABLE)
         .select("*")
         .eq("workspace_id", workspace_id)
-        .order("connected_at", desc=True)
+        .order("created_at", desc=True)
         .execute()
     )
     return list(result.data)

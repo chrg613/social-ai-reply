@@ -165,7 +165,7 @@ def _structured_brand_analysis(llm: LLMClient, text: str, fallback_name: str) ->
             "product_summary should focus on the CORE business problem the company solves in its domain, "
             "NOT generic technology features like AI, VR, or automation. For example, if a real estate platform "
             "uses VR tours, the product_summary should emphasize real estate search and property discovery, "
-            "not VR technology.\n\n"
+            "not VR technology. Include any location/geography focus in the summary if the business is location-specific.\n\n"
             "target_audience should list the DOMAIN-SPECIFIC audience (e.g. 'home buyers, property investors, "
             "real estate agents' for a real estate platform), NOT generic tech users."
         )

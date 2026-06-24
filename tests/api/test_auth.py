@@ -67,10 +67,10 @@ class TestRegister:
         data = resp.json()
         assert "access_token" in data
         assert data["user"]["email"] == "new@example.com"
-        assert "supabase_user_id" in data["user"]
+        assert "supabase_uid" in data["user"]
         user = get_user_by_email(mock_supabase, "new@example.com")
         assert user is not None
-        assert user["supabase_user_id"] is not None
+        assert user["supabase_uid"] is not None
 
     @patch("app.api.v1.routes.auth.sign_up", side_effect=_mock_supabase_signup)
     def test_register_duplicate_email(self, mock_signup, client, mock_supabase):
@@ -183,12 +183,12 @@ class TestOAuthComplete:
         assert resp.status_code == 201
         data = resp.json()
         assert data["user"]["email"] == "oauth@example.com"
-        assert data["user"]["supabase_user_id"] == supabase_uid
+        assert data["user"]["supabase_uid"] == supabase_uid
         assert data["workspace"]["name"] == "OAuth Workspace"
 
         user = get_user_by_email(mock_supabase, "oauth@example.com")
         assert user is not None
-        assert user["supabase_user_id"] == supabase_uid
+        assert user["supabase_uid"] == supabase_uid
         assert user["full_name"] == "OAuth User"
 
     def test_oauth_complete_rejects_duplicate_email(self, client, mock_supabase):

@@ -80,7 +80,7 @@ function SetupForm() {
         {/* Mobile-only slim header */}
         <div className="mb-8 md:hidden">
           <Link href="/" className="text-xl font-bold text-primary">
-            RedditFlow
+            SignalFlow
           </Link>
         </div>
 

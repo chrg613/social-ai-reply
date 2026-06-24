@@ -1,4 +1,4 @@
-"""Custom exception hierarchy for RedditFlow API.
+"""Custom exception hierarchy for SignalFlow API.
 
 These map to structured HTTP responses via the global exception handler in main.py.
 """

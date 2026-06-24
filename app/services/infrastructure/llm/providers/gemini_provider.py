@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_MAX_RETRIES = 5
+_INITIAL_BACKOFF = 4.0
+
 
 class GeminiProvider:
     """Gemini provider using the native REST API via httpx.

@@ -248,7 +248,7 @@ def _setup_account_and_project(mock_supabase, workspace_id: int) -> tuple[str, i
     ).execute()
     project = (
         mock_supabase.table("projects")
-        .insert({"workspace_id": workspace_id, "name": "Proj", "slug": "proj", "status": "active"})
+        .insert({"workspace_id": workspace_id, "name": "Proj", "slug": "proj", "is_active": True})
         .execute()
         .data[0]
     )

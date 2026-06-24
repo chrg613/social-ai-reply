@@ -1,39 +1,44 @@
+# Python
 .venv/
 .venv_linux/
 venv/
-.pytest_cache/
 __pycache__/
 *.pyc
 *.egg-info/
-*.tsbuildinfo
-.~lock.*#
-/package-lock.json
+.pytest_cache/
+.ruff_cache/
 
+# Node / Frontend
+node_modules/
+.next/
+*.tsbuildinfo
+web/next-env.d.ts
+
+# Environment (secrets)
 .env
 .env.local
 web/.env.local
 
+# Database
 *.db
-poacher.db
 *.log
-backend.out.log
-backend.err.log
-e2e_results.log*
 
-node_modules/
-.next/
-.factory/
-.claude/worktrees/
-web/next-env.d.ts
+# OS
+.DS_Store
+Thumbs.db
 
+# IDE
+.vscode/
+.idea/
+
+# Build / Deploy artifacts
 exports/
 sessions/
-session-aaltufaltu126
-
-# Local scratch / dev process artifacts
-.codex-dev/
-test_write
-*.bak
 web/tmp/
 web/sessions/
 
+# Dev scratch files
+.codex-dev/
+.claude/worktrees/
+.factory/
+*.bak

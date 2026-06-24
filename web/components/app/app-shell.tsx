@@ -8,6 +8,7 @@ import { type Project, apiRequest, isAuthError } from "@/lib/api";
 import { getErrorMessage } from "@/types/errors";
 import { setStoredProjectId, withProjectId } from "@/lib/project";
 import { useSelectedProjectId } from "@/hooks/use-selected-project";
+import { useProjectStore } from "@/stores/project-store";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { supabase } from "@/lib/supabase";
@@ -52,6 +53,7 @@ import {
   Settings,
   Check,
   BarChart2,
+  Crosshair,
 } from "lucide-react";
 import { MobileNav } from "@/components/shared/mobile-nav";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -95,6 +97,7 @@ const NAV_SECTIONS = [
     items: [
       { href: "/app/company", label: "Company Setup", icon: UserCircle },
       { href: "/app/brand-brain", label: "Brand Brain", icon: Palette },
+      { href: "/app/competitors", label: "Competitor Intel", icon: Crosshair },
       { href: "/app/sources", label: "Sources", icon: Search },
     ],
   },
@@ -103,7 +106,7 @@ const NAV_SECTIONS = [
     icon: Radar,
     items: [
       { href: "/app/agents", label: "Agents Feed", icon: Radar },
-      { href: "/app/discovery", label: "Reddit Radar", icon: Radar },
+      { href: "/app/discovery", label: "Social Radar", icon: Radar },
       { href: "/app/content", label: "Content Studio", icon: FileText },
     ],
   },
@@ -131,9 +134,10 @@ const PATH_TITLES: Record<string, string> = {
   "/app/analytics": "Overview / Analytics",
   "/app/company": "Intelligence / Company Setup",
   "/app/brand-brain": "Intelligence / Brand Brain",
+  "/app/competitors": "Intelligence / Competitor Intel",
   "/app/sources": "Intelligence / Sources",
   "/app/agents": "Opportunities / Agents Feed",
-  "/app/discovery": "Opportunities / Reddit Radar",
+  "/app/discovery": "Opportunities / Social Radar",
   "/app/content": "Opportunities / Content Studio",
   "/app/content-studio": "Opportunities / Content Studio (New)",
   "/app/subreddits": "Engage / Communities",
@@ -181,6 +185,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [notifCount, setNotifCount] = useState(0);
   const selectedProjectId = useSelectedProjectId();
+  const hasAutoSelected = useRef(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   // Separate state for desktop and mobile notification popovers to avoid conflicts
@@ -245,9 +250,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
     if (!projects.length) {
       return;
     }
-    if (selectedProjectId && projects.some((project) => project.id === selectedProjectId)) {
+    // Only auto-select when there is no selectedProjectId (null/undefined).
+    // If a valid ID is set but not yet in the list, the project may still be loading.
+    // The ref prevents this effect from re-triggering loadShell more than once.
+    if (selectedProjectId != null) {
       return;
     }
+    if (hasAutoSelected.current) {
+      return;
+    }
+    hasAutoSelected.current = true;
     const nextProjectId = projects[0].id;
     setStoredProjectId(nextProjectId);
   }, [dash?.projects, selectedProjectId]);
@@ -266,6 +278,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
       if (dashRes.status === "fulfilled") {
         setDash(dashRes.value);
+        if (dashRes.value.projects) {
+          useProjectStore.getState().setProjects(dashRes.value.projects);
+        }
       }
       if (notifRes.status === "fulfilled") {
         setNotifCount(notifRes.value.unread_count || 0);
@@ -486,7 +501,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
               </div>
               {!sidebarCollapsed && (
                 <div className="flex flex-col leading-none">
-                  <span className="text-base font-bold tracking-tight">RedditFlow</span>
+                  <span className="text-base font-bold tracking-tight">SignalFlow</span>
                   <span className="text-[9px] font-semibold text-sidebar-primary/70 uppercase tracking-widest mt-1">Community OS</span>
                 </div>
               )}

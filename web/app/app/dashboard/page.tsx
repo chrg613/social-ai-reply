@@ -277,7 +277,6 @@ export default function DashboardPage() {
         );
       } catch (err: unknown) {
         console.warn("Failed to load dashboard:", err);
-        toast.error("Failed to load dashboard");
       }
 
       try {
@@ -288,7 +287,6 @@ export default function DashboardPage() {
         );
       } catch (err: unknown) {
         console.warn("Failed to load usage:", err);
-        toast.error("Failed to load usage data");
       }
 
       try {
@@ -299,7 +297,6 @@ export default function DashboardPage() {
         );
       } catch (err: unknown) {
         console.warn("Failed to load visibility:", err);
-        toast.error("Failed to load visibility data");
       }
 
       try {
@@ -317,7 +314,6 @@ export default function DashboardPage() {
         actData = res.items || [];
       } catch (err: unknown) {
         console.warn("Failed to load activity:", err);
-        toast.error("Failed to load activity data");
       }
 
       setDash(dashData);

@@ -1,4 +1,4 @@
-"""Pydantic v2 models for RedditFlow database tables.
+"""Pydantic v2 models for SignalFlow database tables.
 
 These models provide type-safe representations of database records
 and are used with ConfigDict(from_attributes=True) for validation.

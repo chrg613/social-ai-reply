@@ -114,15 +114,25 @@ def generate_keywords(
         if item.keyword in existing_keyword_set:
             continue
 
-        keyword_data = {
+        keyword_data: dict = {
             "project_id": project_id,
             "keyword": item.keyword,
             "rationale": item.rationale,
             "priority_score": item.priority_score,
+            "category": item.category,
             "source": "generated",
             "is_active": True,
         }
-        row = create_discovery_keyword(supabase, keyword_data)
+        try:
+            row = create_discovery_keyword(supabase, keyword_data)
+        except Exception:
+            # category column may not exist yet — retry without it
+            keyword_data.pop("category", None)
+            try:
+                row = create_discovery_keyword(supabase, keyword_data)
+            except Exception as inner_e:
+                logger.warning("Failed to insert keyword '%s': %s", item.keyword, inner_e)
+                continue
         created.append(row)
 
     return [KeywordResponse.model_validate(row) for row in created]

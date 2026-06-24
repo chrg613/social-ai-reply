@@ -29,7 +29,7 @@ export function Footer() {
         <div className="grid gap-8 md:grid-cols-4">
           <div>
             <div className="text-lg font-bold tracking-tight text-foreground">
-              RedditFlow
+              SignalFlow
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
               AI visibility and community engagement for modern brands.
@@ -72,7 +72,7 @@ export function Footer() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border pt-8 md:flex-row">
           <p className="text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} RedditFlow. All rights reserved.
+            &copy; {new Date().getFullYear()} SignalFlow. All rights reserved.
           </p>
           <div className="flex gap-4">
             {["Twitter", "LinkedIn", "Reddit"].map((social) => (

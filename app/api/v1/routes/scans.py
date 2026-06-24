@@ -10,17 +10,53 @@ from app.db.supabase_client import get_supabase
 from app.db.tables.discovery import create_scan_run, get_scan_run_by_id
 from app.db.tables.projects import get_project_by_id
 from app.schemas.v1.discovery import ScanRequest, ScanRunResponse
-from app.services.product.scanner import run_scan
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["scans"])
 
 
 def _run_scan_background(db: Client, project: dict, payload: ScanRequest, scan_run_id: str) -> None:
+    from app.db.tables.discovery import get_scan_run_by_id, update_scan_run
+
+    # Determine which platforms to scan
+    extra_platforms = list(payload.platforms) if payload.platforms else []
+    if not extra_platforms and payload.platform == "all":
+        extra_platforms = ["reddit", "twitter", "instagram", "linkedin"]
+    elif not extra_platforms:
+        extra_platforms = ["reddit"]  # default = reddit
+
+    # Always include reddit if it was requested
+    if payload.platform == "reddit" and "reddit" not in extra_platforms:
+        extra_platforms.insert(0, "reddit")
+
+    # Deduplicate
+    platforms = list(dict.fromkeys(extra_platforms))
+
     try:
-        run_scan(db, project, payload, scan_run_id=scan_run_id)
-    except Exception:  # noqa: BLE001 — run_scan already persisted the error status
+        from app.services.product.platform_scanner import run_platform_scan
+
+        run_platform_scan(
+            db, project,
+            platforms=platforms,
+            scan_run_id=scan_run_id,
+            limit_per_platform=payload.max_posts_per_subreddit,
+            min_score=payload.min_score,
+            time_filter=payload.time_filter,
+        )
+    except Exception:
         logger.exception("Background scan %s failed", scan_run_id)
+    finally:
+        # Guarantee the scan_run transitions out of "running".
+        try:
+            current = get_scan_run_by_id(db, scan_run_id)
+            if current and current.get("status") == "running":
+                update_scan_run(db, scan_run_id, {
+                    "status": "completed",
+                    "completed_at": datetime.now(UTC).isoformat(),
+                })
+                logger.info("Scan %s: forced status to 'completed' (was still running)", scan_run_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to finalize scan run %s status", scan_run_id)
 
 
 @router.post("/scans", response_model=ScanRunResponse)
@@ -32,7 +68,13 @@ def create_scan(
     workspace: dict = Depends(get_current_workspace),
     supabase: Client = Depends(get_supabase),
 ) -> ScanRunResponse:
-    """Start a scan and return immediately; poll GET /v1/scans/{id} for progress."""
+    """Start a scan and return immediately; poll GET /v1/scans/{id} for progress.
+
+    When ``platforms`` is provided (e.g., ``["twitter", "linkedin"]``), the scan
+    runs the standard Reddit scanner **plus** the multi-platform scanner in the
+    same background task.  Set ``platform`` to ``"all"`` as a shortcut for all
+    non-Reddit platforms.
+    """
     ensure_workspace_membership(supabase, workspace["id"], current_user["id"])
     effective_project_id = project_id or payload.project_id
     proj = get_active_project(supabase, workspace["id"], effective_project_id)
@@ -44,8 +86,21 @@ def create_scan(
     from app.db.tables.discovery import list_discovery_keywords_for_project, list_monitored_subreddits_for_project
     if not any(k.get("is_active", True) for k in list_discovery_keywords_for_project(supabase, proj["id"])):
         raise HTTPException(status_code=400, detail="Add discovery keywords before scanning.")
-    if not any(s.get("is_active", True) for s in list_monitored_subreddits_for_project(supabase, proj["id"])):
-        raise HTTPException(status_code=400, detail="Add monitored subreddits before scanning.")
+
+    # Only require subreddits when Reddit is actually part of the scan.
+    # Non-Reddit platforms (Twitter, LinkedIn, Instagram) use keyword search
+    # and don't need monitored subreddits.
+    extra_platforms = payload.platforms
+    scanning_reddit = payload.platform == "reddit" or payload.platform == "all" or not extra_platforms
+    no_active_subreddits = scanning_reddit and not any(
+        s.get("is_active", True) for s in list_monitored_subreddits_for_project(supabase, proj["id"])
+    )
+    if no_active_subreddits:
+        if extra_platforms:
+            # Non-Reddit platforms don't need subreddits; skip Reddit instead of blocking
+            scanning_reddit = False  # noqa: F841
+        else:
+            raise HTTPException(status_code=400, detail="Add monitored subreddits before scanning.")
 
     run = create_scan_run(supabase, {
         "project_id": proj["id"],
@@ -75,3 +130,105 @@ def get_scan(
     if not project or project.get("workspace_id") != workspace["id"]:
         raise HTTPException(status_code=404, detail="Scan run not found.")
     return ScanRunResponse.model_validate(run)
+
+
+# ── Multi-platform scanning ─────────────────────────────────────────────
+
+
+class PlatformScanRequest(ScanRequest):
+    """Extended scan request that supports multi-platform scanning."""
+    platforms: list[str] = ["twitter"]
+    limit_per_platform: int = 25
+
+
+@router.post("/scans/platforms")
+def create_platform_scan(
+    payload: PlatformScanRequest,
+    background_tasks: BackgroundTasks,
+    project_id: int = Query(default=None, ge=1),
+    current_user: dict = Depends(get_current_user),
+    workspace: dict = Depends(get_current_workspace),
+    supabase: Client = Depends(get_supabase),
+) -> dict:
+    """Start a multi-platform scan (Twitter/X, Instagram, etc.).
+
+    This runs alongside the existing Reddit scanner. It uses RapidAPI-powered
+    adapters to fetch posts from non-Reddit platforms, score them, and create
+    opportunities.
+    """
+    ensure_workspace_membership(supabase, workspace["id"], current_user["id"])
+    effective_project_id = project_id or payload.project_id
+    proj = get_active_project(supabase, workspace["id"], effective_project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="No active project found.")
+
+    run = create_scan_run(supabase, {
+        "project_id": proj["id"],
+        "status": "running",
+        "search_window_hours": payload.search_window_hours,
+        "posts_scanned": 0,
+        "opportunities_found": 0,
+        "started_at": datetime.now(UTC).isoformat(),
+    })
+
+    def _run_platform_scan_bg(db: Client, project: dict, platforms: list[str], scan_run_id: str, limit: int, time_filter: str = "week") -> None:
+        try:
+            from app.services.product.platform_scanner import run_platform_scan
+            result = run_platform_scan(
+                db, project,
+                platforms=platforms,
+                scan_run_id=scan_run_id,
+                limit_per_platform=limit,
+                time_filter=time_filter,
+            )
+            from app.db.tables.discovery import update_scan_run
+            update_scan_run(db, scan_run_id, {
+                "status": "completed",
+                "completed_at": datetime.now(UTC).isoformat(),
+                "posts_scanned": result.get("posts_scanned", 0),
+                "opportunities_found": result.get("opportunities_found", 0),
+            })
+        except Exception:
+            logger.exception("Platform scan %s failed", scan_run_id)
+            try:
+                from app.db.tables.discovery import update_scan_run as _update
+                _update(db, scan_run_id, {
+                    "status": "failed",
+                    "error_message": "Platform scan failed",
+                    "completed_at": datetime.now(UTC).isoformat(),
+                })
+            except Exception:
+                pass
+
+    background_tasks.add_task(
+        _run_platform_scan_bg,
+        supabase, proj, payload.platforms, run["id"], payload.limit_per_platform, payload.time_filter,
+    )
+    return {"scan_run_id": run["id"], "platforms": payload.platforms, "status": "running"}
+
+
+@router.get("/platforms/health")
+async def platform_health(
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Check connectivity of all configured platform adapters.
+
+    Returns per-platform health status, rate limit info, and search strategy.
+    """
+    from app.services.infrastructure.platforms.router import PLATFORM_INFO, PlatformRouter
+
+    all_platforms = [p for p in PLATFORM_INFO if p != "x"]  # skip "x" alias
+    router_instance = PlatformRouter(platforms=all_platforms)
+    health_results = await router_instance.health_check_all()
+
+    platform_details = {}
+    for name in all_platforms:
+        info = PLATFORM_INFO.get(name, {})
+        platform_details[name] = {
+            "healthy": health_results.get(name, False),
+            "host": info.get("host", "unknown"),
+            "search_strategy": info.get("search", "unknown"),
+            "rate_limit": info.get("limit", "unknown"),
+        }
+
+    return {"platforms": platform_details}

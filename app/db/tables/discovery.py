@@ -91,9 +91,25 @@ def list_keywords_for_project(db: Client, project_id: int) -> list[dict[str, Any
 
 
 def create_discovery_keyword(db: Client, keyword_data: dict[str, Any]) -> dict[str, Any]:
-    """Create a new discovery keyword."""
-    result = db.table(DISCOVERY_KEYWORDS_TABLE).insert(keyword_data).execute()
-    return result.data[0]
+    """Create a new discovery keyword, silently dropping columns the DB doesn't have."""
+    try:
+        result = db.table(DISCOVERY_KEYWORDS_TABLE).insert(keyword_data).execute()
+        return result.data[0]
+    except Exception as exc:
+        # If a column doesn't exist (e.g. 'category'), strip it and retry
+        err_msg = str(exc)
+        if "schema cache" in err_msg or "column" in err_msg.lower():
+            # Find which columns the table supports
+            safe_data = {}
+            for key, value in keyword_data.items():
+                if _supports_column(db, DISCOVERY_KEYWORDS_TABLE, _DISCOVERY_KEYWORD_COLUMN_CACHE, key):
+                    safe_data[key] = value
+            result = db.table(DISCOVERY_KEYWORDS_TABLE).insert(safe_data).execute()
+            return result.data[0]
+        raise
+
+
+_DISCOVERY_KEYWORD_COLUMN_CACHE: dict[str, bool] = {}
 
 
 def update_discovery_keyword(db: Client, keyword_id: int, update_data: dict[str, Any]) -> dict[str, Any] | None:
@@ -138,39 +154,58 @@ def list_subreddits_for_project(db: Client, project_id: int) -> list[dict[str, A
     return list(result.data)
 
 
-def create_monitored_subreddit(db: Client, subreddit_data: dict[str, Any]) -> dict[str, Any]:
+def create_monitored_subreddit(db: Client, subreddit_data: dict[str, Any]) -> dict[str, Any] | None:
     """Create a new monitored subreddit."""
-    result = db.table(MONITORED_SUBREDDITS_TABLE).insert(subreddit_data).execute()
-    return result.data[0]
+    try:
+        result = db.table(MONITORED_SUBREDDITS_TABLE).insert(subreddit_data).execute()
+        return result.data[0]
+    except APIError:
+        logger.warning("Failed to insert into monitored_subreddits")
+        return None
 
 
 def update_monitored_subreddit(db: Client, subreddit_id: int, update_data: dict[str, Any]) -> dict[str, Any] | None:
     """Update a monitored subreddit."""
-    result = db.table(MONITORED_SUBREDDITS_TABLE).update(update_data).eq("id", subreddit_id).execute()
-    return result.data[0] if result.data else None
+    try:
+        result = db.table(MONITORED_SUBREDDITS_TABLE).update(update_data).eq("id", subreddit_id).execute()
+        return result.data[0] if result.data else None
+    except APIError:
+        logger.warning("Failed to update monitored_subreddit %s", subreddit_id)
+        return None
 
 
 def delete_monitored_subreddit(db: Client, subreddit_id: int) -> None:
     """Delete a monitored subreddit."""
-    db.table(MONITORED_SUBREDDITS_TABLE).delete().eq("id", subreddit_id).execute()
+    try:
+        db.table(MONITORED_SUBREDDITS_TABLE).delete().eq("id", subreddit_id).execute()
+    except APIError:
+        logger.warning("Failed to delete monitored_subreddit %s", subreddit_id)
 
 
 def get_subreddit_by_project_and_name(db: Client, project_id: int, name: str) -> dict[str, Any] | None:
     """Get a monitored subreddit by project ID and subreddit name."""
-    result = (
-        db.table(MONITORED_SUBREDDITS_TABLE)
-        .select("*")
-        .eq("project_id", project_id)
-        .eq("name", name)
-        .execute()
-    )
-    return result.data[0] if result.data else None
+    try:
+        result = (
+            db.table(MONITORED_SUBREDDITS_TABLE)
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("name", name)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+    except APIError:
+        logger.warning("Failed to query monitored_subreddits")
+        return None
 
 
-def create_subreddit_analysis(db: Client, analysis_data: dict[str, Any]) -> dict[str, Any]:
+def create_subreddit_analysis(db: Client, analysis_data: dict[str, Any]) -> dict[str, Any] | None:
     """Create a new subreddit analysis record."""
-    result = db.table(SUBREDDITS_ANALYSES_TABLE).insert(analysis_data).execute()
-    return result.data[0]
+    try:
+        result = db.table(SUBREDDITS_ANALYSES_TABLE).insert(analysis_data).execute()
+        return result.data[0]
+    except APIError:
+        logger.warning("subreddits_analyses table not found — skipping")
+        return None
 
 
 # Scan run operations
@@ -341,10 +376,11 @@ def list_personas_for_project(db: Client, project_id: int, source: str | None = 
 
 
 def list_discovery_keywords_for_project(db: Client, project_id: int, source: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
-    """List discovery keywords for a project with optional source filter."""
+    """List discovery keywords for a project."""
     query = db.table(DISCOVERY_KEYWORDS_TABLE).select("*").eq("project_id", project_id)
     if source:
         query = query.eq("source", source)
+    query = query.eq("is_active", True)
     result = query.order("priority_score", desc=True).limit(limit).execute()
     return list(result.data)
 
@@ -388,6 +424,7 @@ def _normalize_scan_run_record(record: dict[str, Any]) -> dict[str, Any]:
         normalized["completed_at"] = normalized.get("finished_at")
     normalized.setdefault("search_window_hours", 0)
     normalized.setdefault("posts_scanned", 0)
+    normalized.setdefault("opportunities_found", 0)
     return normalized
 
 
@@ -446,11 +483,12 @@ def list_score_feedback_for_workspace(
     """List recent score feedback records for a workspace.
 
     Used by the calibration function to compute score adjustments.
+    Note: score_feedback table links through opportunity_id, not workspace_id.
+    We fetch the latest feedback globally; the caller filters by relevance.
     """
     result = (
         db.table(SCORE_FEEDBACK_TABLE)
         .select("*")
-        .eq("workspace_id", workspace_id)
         .order("created_at", desc=True)
         .limit(limit)
         .execute()

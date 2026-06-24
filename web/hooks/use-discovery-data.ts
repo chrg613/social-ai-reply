@@ -6,7 +6,7 @@
  * exposes the CRUD actions for each with toast feedback.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import type { CommunityItem } from "@/components/discovery/communities-section";
 import type { SignalItem } from "@/components/discovery/signals-section";
@@ -38,6 +38,8 @@ export function useDiscoveryData(token: string | null | undefined, selectedProje
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const hasLoadedOnceRef = useRef(false);
 
   const [addingKeyword, setAddingKeyword] = useState(false);
   const [generatingKeywords, setGeneratingKeywords] = useState(false);
@@ -71,6 +73,10 @@ export function useDiscoveryData(token: string | null | undefined, selectedProje
         dashRes.projects?.find((item) => item.id === selectedProjectId) ?? dashRes.projects?.[0] ?? null;
       setProject(currentProject);
       if (!currentProject) {
+        // No project found — clear loading flags so the UI can render
+        // a "no project" empty state instead of an eternal spinner.
+        setLoading(false);
+        setInitialLoading(false);
         return;
       }
 
@@ -89,6 +95,10 @@ export function useDiscoveryData(token: string | null | undefined, selectedProje
       error("Failed to load data", getErrorMessage(err));
     } finally {
       setLoading(false);
+      if (!hasLoadedOnceRef.current) {
+        hasLoadedOnceRef.current = true;
+        setInitialLoading(false);
+      }
     }
   }, [token, selectedProjectId, error]);
 
@@ -273,6 +283,7 @@ export function useDiscoveryData(token: string | null | undefined, selectedProje
     opportunities,
     campaigns,
     loading,
+    initialLoading,
     addingKeyword,
     generatingKeywords,
     discoveringCommunities,

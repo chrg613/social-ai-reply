@@ -1,10 +1,11 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { PlatformIcon } from "@/components/shared/platform-icon";
 import { ScoreBadge } from "@/components/shared/score-badge";
 import { cn } from "@/lib/utils";
 import type { Opportunity } from "@/lib/api";
-import { sourceLabel } from "@/lib/opportunity";
+import { sourceLabel, sourcePlatform } from "@/lib/opportunity";
 
 import { humanizeStage, stageBadgeClass } from "./buying-stage";
 
@@ -18,9 +19,10 @@ interface InboxRowProps {
   onToggleChecked: () => void;
 }
 
-/** Compact, selectable inbox row: checkbox, source, title, stage badge, score. */
+/** Compact, selectable inbox row: checkbox, platform icon, source, title, stage badge, score. */
 export function InboxRow({ opportunity, selected, checked, isNew, onSelect, onToggleChecked }: InboxRowProps) {
   const unread = opportunity.status === "new";
+  const platform = sourcePlatform(opportunity);
 
   return (
     <div
@@ -58,6 +60,7 @@ export function InboxRow({ opportunity, selected, checked, isNew, onSelect, onTo
               aria-label="New since last visit"
             />
           )}
+          <PlatformIcon platform={platform} className="h-3.5 w-3.5 shrink-0 opacity-60" />
           <span
             className={cn(
               "block truncate text-sm",

@@ -8,7 +8,7 @@ import { PlatformIcon } from "@/components/shared/platform-icon";
 import { ScoreBadge } from "@/components/shared/score-badge";
 import type { Opportunity } from "@/lib/api";
 import { sourceLabel, sourcePlatform } from "@/lib/opportunity";
-import { redditUrl } from "@/lib/reddit";
+import { platformUrl } from "@/lib/reddit";
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
@@ -31,7 +31,7 @@ export function OpportunityCard({ opportunity, generating = false, onGenerateRep
       {/* Center: Title + signal badges */}
       <div className="flex-1 min-w-0">
         <a
-          href={redditUrl(opportunity.permalink)}
+          href={platformUrl(opportunity.permalink, (opportunity as Record<string, unknown>).platform as string | undefined)}
           target="_blank"
           rel="noopener noreferrer"
           className="text-sm font-medium text-foreground hover:underline truncate block"

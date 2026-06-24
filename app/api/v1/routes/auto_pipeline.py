@@ -6,7 +6,6 @@ from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Qu
 from supabase import Client
 
 from app.api.v1.deps import (
-    ensure_default_project,
     ensure_workspace_membership,
     get_active_project,
     get_current_user,
@@ -68,13 +67,18 @@ def start_auto_pipeline(
 
     website_url = payload.get("website_url")
     project_id = payload.get("project_id")
+    time_filter = payload.get("time_filter", "week")
+    if time_filter not in {"day", "week", "month", "year", "all"}:
+        time_filter = "week"
 
     if not website_url:
         raise HTTPException(400, "website_url is required.")
 
     _ensure_llm_ready()
 
-    proj = get_active_project(supabase, workspace["id"], project_id) or ensure_default_project(supabase, workspace)
+    proj = get_active_project(supabase, workspace["id"], project_id)
+    if not proj:
+        raise HTTPException(404, "No active project found. Please create a project first.")
 
     pipeline = create_auto_pipeline(
         supabase,
@@ -95,6 +99,7 @@ def start_auto_pipeline(
         proj["id"],
         workspace["id"],
         current_user["id"],
+        time_filter,
     )
 
     return {
@@ -163,17 +168,11 @@ def get_auto_pipeline(
             visible_opportunities = [o for o in all_opportunities if o.get("status") in {"new", "drafting"}]
             drafts = list_reply_drafts_for_project(supabase, proj["id"])
             opportunity_titles = {o["id"]: o["title"] for o in all_opportunities}
-            persona_limit = max(int(pipeline.get("personas_generated") or 0), 0)
-            keyword_limit = max(int(pipeline.get("keywords_generated") or 0), 0)
-            subreddit_limit = max(int(pipeline.get("subreddits_found") or 0), 0)
-            opportunity_limit = max(int(pipeline.get("opportunities_found") or 0), 0)
-            draft_limit = max(int(pipeline.get("drafts_generated") or 0), 0)
-
-            personas = _slice_run_results(personas, persona_limit)
-            keywords = _slice_run_results(keywords, keyword_limit)
-            subreddits = _slice_run_results(subreddits, subreddit_limit)
-            visible_opportunities = _slice_run_results(visible_opportunities, opportunity_limit)
-            drafts = _slice_run_results(drafts, draft_limit)
+            # Show actual project data rather than slicing to stale persisted
+            # counts.  The persisted numbers (opportunities_found, drafts_generated)
+            # may be zero if e.g. the LLM was rate-limited during draft generation,
+            # but drafts may have been created manually/later.  Limiting to those
+            # stale counts caused the UI to show "0 drafts" even when drafts exist.
 
             response["results"] = {
                 "brand_summary": pipeline["brand_summary"] or "",
@@ -190,7 +189,7 @@ def get_auto_pipeline(
                     for s in subreddits
                 ],
                 "opportunities": [
-                    {"title": o["title"], "subreddit": o["subreddit_name"], "score": o.get("score", 0), "author": o.get("author", "")}
+                    {"title": o["title"], "subreddit": o["subreddit_name"], "platform": o.get("platform", "reddit"), "score": o.get("score", 0), "author": o.get("author", "")}
                     for o in visible_opportunities
                 ],
                 "drafts": [
@@ -217,7 +216,9 @@ def list_auto_pipelines(
 ):
     """List all pipeline runs."""
     ensure_workspace_membership(supabase, workspace["id"], current_user["id"])
-    proj = get_active_project(supabase, workspace["id"], project_id) or ensure_default_project(supabase, workspace)
+    proj = get_active_project(supabase, workspace["id"], project_id)
+    if not proj:
+        raise HTTPException(404, "No active project found. Please create a project first.")
 
     pipelines = list_auto_pipelines_for_project(supabase, proj["id"], limit=limit, offset=offset)
 

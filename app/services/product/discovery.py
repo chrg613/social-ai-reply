@@ -36,10 +36,10 @@ from app.services.product.relevance import (
     tokenize,
 )
 
-log = logging.getLogger("redditflow.discovery")
+log = logging.getLogger("signalflow.discovery")
 
-DEFAULT_MIN_SUBREDDIT_FIT = 40
-MAX_DISCOVERY_KEYWORDS = 10
+DEFAULT_MIN_SUBREDDIT_FIT = 30
+MAX_DISCOVERY_KEYWORDS = 5
 SUBREDDIT_TRAILING_GENERIC_TOKENS = {
     "app",
     "apps",
@@ -80,32 +80,69 @@ class SubredditAssessment:
     reasons: list[str]
 
 
-def get_project_search_keywords(supabase: Client, project: dict, limit: int = 8, *, include_brand: bool = True) -> list[str]:
-    """Get high-signal search keywords for a project."""
+def get_project_search_keywords(supabase: Client, project: dict, limit: int = 15, *, include_brand: bool = True) -> list[str]:
+    """Get high-signal search keywords for a project.
+
+    High-priority keywords (priority_score >= 70) are included first in their
+    DB-stored priority order. Remaining slots are filled via the domain-signal
+    ranker to catch useful heuristic keywords that didn't come from the LLM.
+    """
 
     rows = list_keywords_for_project(supabase, project["id"])
     active_rows = [r for r in rows if r.get("is_active", True)]
     active_rows.sort(key=lambda x: x.get("priority_score", 50), reverse=True)
-    raw_keywords = [row["keyword"] for row in active_rows]
 
     brand = project.get("brand_profile")
     brand_name = brand.get("brand_name") if brand else None
     biz_domain = brand.get("business_domain", "") if brand else ""
 
-    domain_context = build_domain_context(
-        brand_name=brand_name,
-        summary=brand.get("summary") if brand else None,
-        product_summary=brand.get("product_summary") if brand else None,
-        target_audience=brand.get("target_audience") if brand else None,
-        keywords=raw_keywords,
-        business_domain=biz_domain,
-    )
-    return select_high_signal_keywords(
-        raw_keywords,
-        brand_name=brand_name if include_brand else None,
-        limit=limit,
-        domain_context=domain_context,
-    )
+    # Split keywords: high-priority (LLM-scored >= 70) vs. the rest
+    high_priority = [row["keyword"] for row in active_rows if row.get("priority_score", 50) >= 70]
+    remaining = [row["keyword"] for row in active_rows if row.get("priority_score", 50) < 70]
+
+    # Start with brand name if requested
+    selected: list[str] = []
+    seen: set[str] = set()
+    if include_brand and brand_name:
+        normalized_brand = brand_name.strip().lower()
+        if normalized_brand and len(normalized_brand) >= 4:
+            selected.append(brand_name.strip())
+            seen.add(normalized_brand)
+
+    # Add high-priority keywords first (already in priority_score DESC order)
+    for kw in high_priority:
+        if len(selected) >= limit:
+            break
+        kw_lower = kw.strip().lower()
+        if kw_lower not in seen and len(kw_lower) >= 3:
+            selected.append(kw.strip())
+            seen.add(kw_lower)
+
+    # Fill remaining slots with domain-signal-ranked keywords
+    if len(selected) < limit and remaining:
+        domain_context = build_domain_context(
+            brand_name=brand_name,
+            summary=brand.get("summary") if brand else None,
+            product_summary=brand.get("product_summary") if brand else None,
+            target_audience=brand.get("target_audience") if brand else None,
+            keywords=remaining,
+            business_domain=biz_domain,
+        )
+        ranked_remaining = select_high_signal_keywords(
+            remaining,
+            brand_name=None,  # Already added above
+            limit=limit - len(selected),
+            domain_context=domain_context,
+        )
+        for kw in ranked_remaining:
+            if len(selected) >= limit:
+                break
+            kw_lower = kw.strip().lower()
+            if kw_lower not in seen:
+                selected.append(kw)
+                seen.add(kw_lower)
+
+    return selected
 
 
 def discover_and_store_subreddits(
@@ -152,8 +189,31 @@ def discover_and_store_subreddits(
     seen_names = set(existing_names)
     created: list[dict] = []
     candidates: dict[str, tuple[RedditSubredditMatch, SubredditAssessment, list[str]]] = {}
+
+    from app.services.product.reddit_discovery import _HTTP_BUDGET, _REDDIT_HOSTS
+
+    reddit_blocked = any(_HTTP_BUDGET.is_open(h) for h in _REDDIT_HOSTS)
+    if reddit_blocked:
+        log.info("Reddit circuit is open — will skip enrichment calls")
+
     candidate_budget = max(max_subreddits * 6, max_subreddits + 20)
     candidates_reviewed = 0
+    enrichment_failed = False  # Set True after first enrichment failure to skip retries
+
+    # Build a simple keyword/brand token set for lightweight matching.
+    # Used when enrichment data (sample posts, rules) is unavailable.
+    _kw_tokens = set()
+    for kw in assessment_keywords:
+        for tok in kw.lower().split():
+            if len(tok) > 2:
+                _kw_tokens.add(tok)
+    brand = project.get("brand_profile") or {}
+    for field_name in ("brand_name", "business_domain"):
+        val = brand.get(field_name, "")
+        if val:
+            for tok in val.lower().split():
+                if len(tok) > 2:
+                    _kw_tokens.add(tok)
 
     for keyword in search_queries:
         try:
@@ -171,39 +231,70 @@ def discover_and_store_subreddits(
             if normalized_name in seen_names:
                 continue
             seen_names.add(normalized_name)
-
-            if not _is_promising_subreddit_match(match, project, assessment_keywords):
-                log.debug("r/%s rejected at first-pass filter (no sample posts)", match.name)
-                continue
             candidates_reviewed += 1
 
-            sample_posts = _safe_subreddit_posts(reddit, match.name)
-            if not _is_promising_subreddit_match(match, project, assessment_keywords, sample_posts=sample_posts):
-                log.debug("r/%s rejected at second-pass filter (with %d sample posts)", match.name, len(sample_posts))
-                continue
+            # Try enrichment (sample posts + rules) unless Reddit is known-blocked
+            # or a previous enrichment already failed (no point retrying).
+            skip_enrichment = reddit_blocked or enrichment_failed or any(_HTTP_BUDGET.is_open(h) for h in _REDDIT_HOSTS)
+            if skip_enrichment:
+                sample_posts: list[RedditPost] = []
+                rules: list[str] = []
+            else:
+                sample_posts = _safe_subreddit_posts(reddit, match.name)
+                if not sample_posts:
+                    # First enrichment failure — skip for all remaining candidates.
+                    enrichment_failed = True
+                    log.info("Enrichment failed for r/%s — skipping enrichment for remaining candidates", match.name)
+                rules = _safe_subreddit_rules(reddit, match.name) if sample_posts else []
 
-            rules = _safe_subreddit_rules(reddit, match.name)
-            assessment = assess_subreddit_candidate(
-                match=match,
-                about={},
-                rules=rules,
-                sample_posts=sample_posts,
-                project=project,
-                keywords=assessment_keywords,
-            )
-            if not assessment.eligible:
-                log.debug(
-                    "r/%s not eligible: fit=%d topic=%s domain_aligned=%s reasons=%s",
-                    match.name, assessment.fit_score,
-                    bool(assessment.matched_keywords), True, assessment.reasons[:2],
+            if sample_posts:
+                # ── ENRICHED MODE: full scoring with real data ────────────
+                assessment = assess_subreddit_candidate(
+                    match=match,
+                    about={},
+                    rules=rules,
+                    sample_posts=sample_posts,
+                    project=project,
+                    keywords=assessment_keywords,
                 )
-                continue
+                if not assessment.eligible:
+                    log.debug(
+                        "r/%s not eligible (enriched): fit=%d keywords=%s",
+                        match.name, assessment.fit_score,
+                        bool(assessment.matched_keywords),
+                    )
+                    continue
+            else:
+                # ── LIGHTWEIGHT MODE: keyword match in name/description ───
+                # When we have NO sample posts (Reddit blocked, timeout, or
+                # empty subreddit), the full scoring pipeline can't work.
+                # Accept subreddits that have keyword overlap instead.
+                text = f"{match.name} {match.title} {match.description}".lower()
+                hit_count = sum(1 for tok in _kw_tokens if tok in text)
+                if hit_count == 0:
+                    log.debug("r/%s rejected (lightweight): no keyword tokens in name/desc", match.name)
+                    continue
+                assessment = SubredditAssessment(
+                    eligible=True,
+                    fit_score=min(30 + hit_count * 10, 80),
+                    matched_keywords=[tok for tok in _kw_tokens if tok in text][:5],
+                    activity_score=50,
+                    top_post_types=[],
+                    audience_signals=[],
+                    posting_risk=[],
+                    recommendation="Accepted via lightweight keyword matching (no enrichment data).",
+                    reasons=[f"Keyword match ({hit_count} token(s)) in subreddit metadata."],
+                )
+
             previous = candidates.get(normalized_name)
             if previous and _candidate_selection_score(previous[0], previous[1]) >= _candidate_selection_score(match, assessment):
                 continue
             candidates[normalized_name] = (match, assessment, rules)
 
         if candidates_reviewed >= candidate_budget:
+            break
+        if len(candidates) >= max_subreddits:
+            log.info("Already have %d candidates — stopping keyword search", len(candidates))
             break
 
     log.info(

@@ -18,6 +18,7 @@ from app.api.v1.routes.brands import router as brands_router
 from app.api.v1.routes.campaigns import router as campaigns_router
 from app.api.v1.routes.citations import router as citations_router
 from app.api.v1.routes.company import router as company_router
+from app.api.v1.routes.competitors import router as competitors_router
 from app.api.v1.routes.discovery import router as discovery_router
 from app.api.v1.routes.drafts import router as drafts_router
 from app.api.v1.routes.feed import router as feed_router
@@ -39,6 +40,7 @@ from app.api.v1.routes.seo import router as seo_router
 from app.api.v1.routes.sources import router as sources_router
 from app.api.v1.routes.technical_seo import router as technical_seo_router
 from app.api.v1.routes.ugc import router as ugc_router
+from app.api.v1.routes.user_keys import router as user_keys_router
 from app.api.v1.routes.visibility import router as visibility_router
 from app.api.v1.routes.voice_profiles import router as voice_profiles_router
 from app.api.v1.routes.webhooks import router as webhooks_router
@@ -59,6 +61,7 @@ router.include_router(brands_router)
 router.include_router(campaigns_router)
 router.include_router(citations_router)
 router.include_router(company_router)
+router.include_router(competitors_router)
 router.include_router(discovery_router)
 router.include_router(drafts_router)
 router.include_router(feed_router)
@@ -81,6 +84,7 @@ router.include_router(seo_router)
 router.include_router(sources_router)
 router.include_router(technical_seo_router)
 router.include_router(ugc_router)
+router.include_router(user_keys_router)
 router.include_router(visibility_router)
 router.include_router(voice_profiles_router)
 router.include_router(webhooks_router)

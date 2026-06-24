@@ -60,7 +60,7 @@ def _normalize_placeholder(value: str) -> str:
 
 
 class Settings(BaseSettings):
-    app_name: str = "RedditFlow"
+    app_name: str = "SignalFlow"
     environment: str = "development"
     # When True, plan limits from plan_entitlements (with PLAN_CATALOG fallback)
     # are enforced via HTTP 402. Off by default: the product is currently free.
@@ -77,7 +77,7 @@ class Settings(BaseSettings):
 
     encryption_key: str | None = None
 
-    # LLM Provider selection — Gemini is the default for RedditFlow.
+    # LLM Provider selection — Gemini is the default for SignalFlow.
     # See app/core/constants/app.py::DEFAULT_LLM_PROVIDER. Only the active
     # provider's credentials are required; the registry silently skips any
     # provider whose API key is missing.
@@ -108,17 +108,23 @@ class Settings(BaseSettings):
     embedding_model: str = Field(default="tfidf", description="Embedding model: tfidf or sentence-transformers")
     # Rollback switch for the 2026-06 scoring unification: when True the
     # scanner uses the legacy scoring.score_post path instead of RelevanceEngine.
+    # Default is False — the v2 engine is more permissive and produces more
+    # opportunities from RSS feeds (which have score=0, num_comments=0).
     use_legacy_scoring: bool = False
 
     relevance_threshold: int = Field(default=70, ge=0, le=100)
     semantic_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
 
-    reddit_base_url: str = "https://www.reddit.com"
-    reddit_user_agent: str = "web:redditflow:v1.2 (by /u/redditflow_bot)"
+    reddit_base_url: str = "https://old.reddit.com"
+    reddit_user_agent: str = "web:signalflow:v1.0 (by /u/SignalFlowBot)"
     reddit_search_provider: str = "auto"
-    # Min seconds between requests to reddit.com hosts. Reddit asks crawlers to
-    # stay above ~2s; lowering this risks 429s and IP bans.
-    reddit_scrape_min_interval: float = 2.0
+    # Official Reddit OAuth credentials (https://www.reddit.com/prefs/apps)
+    # Gives 100 req/min for free — much better than RapidAPI's 50/month.
+    reddit_client_id: str = ""
+    reddit_client_secret: str = ""
+    # Min seconds between requests to reddit.com hosts.  Reddit's public
+    # endpoints are strict about rate limits; 4s keeps us safely under.
+    reddit_scrape_min_interval: float = 4.0
     serpapi_api_key: str | None = None
     bing_search_api_key: str | None = None
     bing_search_url: str = "https://api.bing.microsoft.com/v7.0/search"
@@ -130,6 +136,12 @@ class Settings(BaseSettings):
     reddit_client_id: str | None = None
     reddit_client_secret: str | None = None
     reddit_redirect_uri: str | None = None
+
+    # RapidAPI (multi-platform social media scraping)
+    rapidapi_key: str | None = None
+
+    # Apify Integration (deprecated)
+    apify_api_token: str | None = None
 
     stripe_secret_key: str | None = None
     stripe_webhook_secret: str | None = None

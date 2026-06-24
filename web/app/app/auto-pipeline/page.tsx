@@ -28,8 +28,9 @@ const PIPELINE_STEPS = [
   { key: "analyzing", label: "Analyzing website" },
   { key: "generating_personas", label: "Generating personas" },
   { key: "discovering_keywords", label: "Discovering keywords" },
-  { key: "finding_subreddits", label: "Finding subreddits" },
-  { key: "scanning_opportunities", label: "Scanning opportunities" },
+  { key: "scanning_all", label: "Scanning Social Media" },
+  { key: "checking_opportunities", label: "Checking opportunities" },
+  { key: "analyzing_competitors", label: "Analyzing competitor mentions" },
   { key: "generating_drafts", label: "Generating drafts" },
 ];
 
@@ -55,8 +56,30 @@ function isRedditDiscoveryError(message?: string | null) {
   return (
     normalized.includes("all subreddit discovery requests failed") ||
     normalized.includes("public reddit feeds") ||
-    normalized.includes("reddit discovery methods failed")
+    normalized.includes("reddit discovery methods failed") ||
+    normalized.includes("no subreddits could be discovered") ||
+    normalized.includes("apify") ||
+    normalized.includes("add monitored subreddits before scanning")
   );
+}
+
+/** Map raw backend error strings to user-friendly messages. */
+function friendlyPipelineError(message?: string | null): string {
+  if (!message) return "Something went wrong while running the pipeline. Please try again.";
+  const m = message.toLowerCase();
+  if (m.includes("add monitored subreddits before scanning"))
+    return "No communities are being monitored yet. The pipeline will discover relevant subreddits automatically — please try again.";
+  if (m.includes("429") || m.includes("too many requests") || m.includes("rate limit"))
+    return "Reddit is temporarily rate-limiting requests. Please wait a few minutes and try again.";
+  if (m.includes("no llm provider"))
+    return "The AI provider is not configured. Please set up your API key in Settings.";
+  if (m.includes("connection") || m.includes("timeout") || m.includes("timed out"))
+    return "Could not connect to an external service. Please check your internet connection and try again.";
+  if (m.includes("could not access reddit") || m.includes("reddit discovery"))
+    return "Reddit is temporarily unavailable. Please retry in a few minutes.";
+  // Strip HTTP status codes from the message for cleaner display
+  const cleaned = message.replace(/^\d{3}:\s*/, "");
+  return cleaned || "An unexpected error occurred. Please try again.";
 }
 
 function openContentStudioForProject(router: ReturnType<typeof useRouter>, projectId: number) {
@@ -73,6 +96,7 @@ export default function AutoPipelinePage() {
 
   // State
   const [urlInput, setUrlInput] = useState("");
+  const [timeFilter, setTimeFilter] = useState("week");
   const [activeRun, setActiveRun] = useState<PipelineRun | null>(null);
   const [previousRuns, setPreviousRuns] = useState<PipelineRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,7 +200,7 @@ export default function AutoPipelinePage() {
       }
       // project_id is optional — the backend will resolve or create a
       // default project when it is omitted or null.
-      const run = await startPipelineRun(token, url, selectedProjectId);
+      const run = await startPipelineRun(token, url, selectedProjectId, timeFilter);
       setActiveRun(run);
       setUrlInput("");
     } catch (error: unknown) {
@@ -194,7 +218,7 @@ export default function AutoPipelinePage() {
 
     try {
       await executePipelineRun(token, activeRun.id);
-      toast.success("Drafts marked as ready! Copy each draft and post to Reddit manually.");
+      toast.success("Drafts marked as ready! Copy each draft and post manually.");
       setActiveRun(null);
       void loadPreviousRuns();
     } catch (error: unknown) {
@@ -236,6 +260,22 @@ export default function AutoPipelinePage() {
               placeholder="https://example.com"
               className="h-12 px-5 text-base rounded-xl"
             />
+            <div className="grid gap-1.5">
+              <label htmlFor="scan-period" className="text-xs font-medium text-muted-foreground">
+                Scan period
+              </label>
+              <select
+                id="scan-period"
+                value={timeFilter}
+                onChange={(e) => setTimeFilter(e.target.value)}
+                className="h-10 w-full rounded-xl border border-input bg-background px-4 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="day">Last 24 hours</option>
+                <option value="week">Last 7 days</option>
+                <option value="month">Last 30 days</option>
+                <option value="all">All time</option>
+              </select>
+            </div>
             <Button
               disabled={launching}
               onClick={handleLaunch}
@@ -360,7 +400,6 @@ export default function AutoPipelinePage() {
         <div className="grid grid-cols-2 md:grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 mb-8">
           <CounterCard label="Personas" value={activeRun.personas_count} />
           <CounterCard label="Keywords" value={activeRun.keywords_count} />
-          <CounterCard label="Subreddits" value={activeRun.subreddits_count} />
           <CounterCard label="Opportunities" value={activeRun.opportunities_count} />
           <CounterCard label="Drafts" value={activeRun.drafts_count} />
         </div>
@@ -417,7 +456,6 @@ export default function AutoPipelinePage() {
         <div className="grid grid-cols-2 md:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 mb-8">
           <SummaryCard label="Personas" value={results.personas.length} />
           <SummaryCard label="Keywords" value={results.keywords.length} />
-          <SummaryCard label="Subreddits" value={results.subreddits.length} />
           <SummaryCard label="Opportunities" value={results.opportunities.length} />
           <SummaryCard label="Drafts" value={results.drafts.length} />
         </div>
@@ -491,35 +529,6 @@ export default function AutoPipelinePage() {
             </div>
           </ExpandableSection>
 
-          {/* Subreddits */}
-          <ExpandableSection
-            title={`Subreddits (${results.subreddits.length})`}
-            isExpanded={expanding["subreddits"]}
-            onToggle={() => toggleExpand("subreddits")}
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13px] border-collapse">
-                <thead>
-                  <tr className="border-b">
-                    <th className="p-2 text-left font-semibold text-muted-foreground">Subreddit</th>
-                    <th className="p-2 text-left font-semibold text-muted-foreground">Fit Score</th>
-                    <th className="p-2 text-left font-semibold text-muted-foreground">Subscribers</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {results.subreddits.map((sub, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="p-2 text-foreground font-medium">r/{sub.name}</td>
-                      <td className="p-2 text-primary font-semibold">{sub.fit_score}</td>
-                      <td className="p-2 text-muted-foreground">
-                        {(sub.subscribers / 1000).toFixed(0)}k
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </ExpandableSection>
 
           {/* Top Opportunities */}
           <ExpandableSection
@@ -532,7 +541,8 @@ export default function AutoPipelinePage() {
                 <thead>
                   <tr className="border-b">
                     <th className="p-2 text-left font-semibold text-muted-foreground">Title</th>
-                    <th className="p-2 text-left font-semibold text-muted-foreground">Subreddit</th>
+                    <th className="p-2 text-left font-semibold text-muted-foreground">Platform</th>
+                    <th className="p-2 text-left font-semibold text-muted-foreground">Source</th>
                     <th className="p-2 text-left font-semibold text-muted-foreground">Score</th>
                   </tr>
                 </thead>
@@ -544,7 +554,8 @@ export default function AutoPipelinePage() {
                           {opp.title}
                         </div>
                       </td>
-                      <td className="p-2 text-muted-foreground">r/{opp.subreddit}</td>
+                      <td className="p-2 text-muted-foreground capitalize">{opp.platform || "reddit"}</td>
+                      <td className="p-2 text-muted-foreground">{opp.platform === "reddit" ? `r/${opp.subreddit}` : opp.subreddit}</td>
                       <td className="p-2 text-primary font-semibold">{opp.score}</td>
                     </tr>
                   ))}
@@ -608,7 +619,7 @@ export default function AutoPipelinePage() {
         <div className="text-5xl mb-4">&#x26A0;&#xFE0F;</div>
         <h2 className="text-2xl font-bold mb-2">Pipeline Failed</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          {activeRun.error_message || "An error occurred while running the pipeline."}
+          {friendlyPipelineError(activeRun.error_message)}
         </p>
         {llmSetupRequired ? (
           <div className="mb-6 rounded-xl border bg-muted/40 p-4 text-left">
@@ -626,7 +637,7 @@ export default function AutoPipelinePage() {
           <div className="mb-6 rounded-xl border bg-muted/40 p-4 text-left">
             <p className="mb-2 text-sm font-semibold text-foreground">Reddit discovery is temporarily unavailable</p>
             <p className="mb-2 text-[13px] text-muted-foreground">
-              RedditFlow now runs without <code>REDDIT_CLIENT_ID</code> or <code>REDDIT_CLIENT_SECRET</code>. This
+              SignalFlow now runs without <code>REDDIT_CLIENT_ID</code> or <code>REDDIT_CLIENT_SECRET</code>. This
               failure means the public Reddit feeds and external search fallback were both unavailable from this
               machine.
             </p>

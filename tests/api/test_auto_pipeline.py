@@ -21,7 +21,7 @@ def _create_project(mock_supabase, workspace_id: int) -> dict:
             "name": "Pipeline Project",
             "slug": "pipeline-project",
             "description": "",
-            "status": "active",
+            "is_active": True,
         },
     )
 

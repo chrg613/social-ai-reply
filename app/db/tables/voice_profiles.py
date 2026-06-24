@@ -2,30 +2,40 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from supabase import Client
 
+logger = logging.getLogger(__name__)
 VOICE_PROFILES_TABLE = "voice_profiles"
 
 
 def get_voice_profile_by_id(db: Client, profile_id: int) -> dict[str, Any] | None:
     """Get a voice profile by ID."""
-    result = db.table(VOICE_PROFILES_TABLE).select("*").eq("id", profile_id).execute()
-    return result.data[0] if result.data else None
+    try:
+        result = db.table(VOICE_PROFILES_TABLE).select("*").eq("id", profile_id).execute()
+        return result.data[0] if result.data else None
+    except Exception:
+        logger.debug("voice_profiles table not available — returning None")
+        return None
 
 
 def list_voice_profiles_for_project(db: Client, project_id: int) -> list[dict[str, Any]]:
     """List all voice profiles for a project."""
-    result = (
-        db.table(VOICE_PROFILES_TABLE)
-        .select("*")
-        .eq("project_id", project_id)
-        .order("created_at", desc=True)
-        .execute()
-    )
-    return list(result.data)
+    try:
+        result = (
+            db.table(VOICE_PROFILES_TABLE)
+            .select("*")
+            .eq("project_id", project_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return list(result.data)
+    except Exception:
+        logger.debug("voice_profiles table not available — returning []")
+        return []
 
 
 def create_voice_profile(db: Client, profile_data: dict[str, Any]) -> dict[str, Any]:
@@ -47,14 +57,18 @@ def delete_voice_profile(db: Client, profile_id: int) -> None:
 
 def get_default_voice_profile_for_project(db: Client, project_id: int) -> dict[str, Any] | None:
     """Get the default voice profile for a project, if one is set."""
-    result = (
-        db.table(VOICE_PROFILES_TABLE)
-        .select("*")
-        .eq("project_id", project_id)
-        .eq("is_default", True)
-        .execute()
-    )
-    return result.data[0] if result.data else None
+    try:
+        result = (
+            db.table(VOICE_PROFILES_TABLE)
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("is_default", True)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+    except Exception:
+        logger.debug("voice_profiles table not available — returning None")
+        return None
 
 
 def unset_default_voice_profiles_for_project(

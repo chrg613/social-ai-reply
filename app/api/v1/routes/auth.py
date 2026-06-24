@@ -16,16 +16,13 @@ from supabase import Client
 from app.api.v1.deps import (
     _is_token_revoked,
     bearer_scheme,
-    ensure_default_prompts,
+    ensure_default_project,
     get_current_user,
     workspace_summary,
 )
 from app.db.supabase_client import get_supabase
 from app.db.tables import (
-    create_brand_profile,
     create_membership,
-    create_project,
-    create_subscription,
     create_user,
     create_workspace,
     get_user_by_email,
@@ -40,7 +37,6 @@ from app.schemas.v1.auth import (
     OAuthCompleteRequest,
     UserResponse,
 )
-from app.services.product.entitlements import seed_plan_entitlements
 from app.services.product.supabase_auth import (
     SupabaseAuthError,
     admin_delete_user,
@@ -80,7 +76,6 @@ def _provision_workspace(supabase: Client, user: dict, workspace_name: str) -> d
         {
             "name": workspace_name.strip(),
             "slug": unique_slug(supabase, "workspaces", workspace_name),
-            "owner_user_id": user["id"],
         },
     )
 
@@ -94,68 +89,11 @@ def _provision_workspace(supabase: Client, user: dict, workspace_name: str) -> d
         },
     )
 
-    # Seed entitlements (no-op for private workspace)
-    seed_plan_entitlements(supabase)
-
-    # Create subscription
-    create_subscription(
-        supabase,
-        {"workspace_id": workspace["id"], "plan_code": "free", "status": "active"},
-    )
-
     # Create default project
     ensure_default_project(supabase, workspace)
 
     return workspace
 
-
-def ensure_default_project(supabase: Client, workspace: dict) -> dict:
-    """Ensure a default project exists for the workspace."""
-    from app.db.tables.projects import list_projects_for_workspace
-
-    projects = list_projects_for_workspace(supabase, workspace["id"])
-    if projects:
-        return projects[0]
-
-    base_name = (workspace.get("name") or "").strip() or "Default"
-    if not base_name.lower().endswith("project"):
-        base_name = f"{base_name} Project"
-
-    slug = unique_slug(supabase, "projects", base_name, "workspace_id", workspace["id"])
-
-    project = create_project(
-        supabase,
-        {
-            "workspace_id": workspace["id"],
-            "name": base_name,
-            "slug": slug,
-            "status": "active",
-            "description": None,
-        },
-    )
-
-    # Create brand profile
-    create_brand_profile(
-        supabase,
-        {
-            "project_id": project["id"],
-            "brand_name": project["name"],
-            "website_url": None,
-            "summary": None,
-            "voice_notes": None,
-            "product_summary": None,
-            "target_audience": None,
-            "call_to_action": None,
-            "business_domain": None,
-            "reddit_username": None,
-            "linkedin_url": None,
-        },
-    )
-
-    # Ensure default prompts
-    ensure_default_prompts(supabase, project["id"])
-
-    return project
 
 
 @router.post("/auth/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -191,7 +129,7 @@ def register(payload: AuthRegisterRequest, supabase: Client = Depends(get_supaba
     try:
         # Create local user record
         user = {
-            "supabase_user_id": sb_user.id,
+            "supabase_uid": sb_user.id,
             "email": email,
             "full_name": payload.full_name.strip(),
             "is_active": True,
@@ -357,7 +295,7 @@ def oauth_complete(
     user = create_user(
         supabase,
         {
-            "supabase_user_id": supabase_uid,
+            "supabase_uid": supabase_uid,
             "email": email,
             "full_name": full_name,
             "is_active": True,
@@ -390,7 +328,7 @@ def logout(
     raw_token = credentials.credentials
     # Revoke tokens locally
     update_data = {
-        "tokens_invalid_before": utc_now().replace(microsecond=0),
+        "tokens_invalid_before": utc_now().replace(microsecond=0).isoformat(),
         "revoked_access_token_hash": hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
     }
     update_user(supabase, current_user["id"], update_data)

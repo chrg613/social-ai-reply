@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
+
+from postgrest.exceptions import APIError
 
 if TYPE_CHECKING:
     from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 NOTIFICATIONS_TABLE = "notifications"
 ACTIVITY_LOGS_TABLE = "activity_logs"
@@ -26,27 +31,43 @@ def list_notifications_for_workspace(
     unread_only: bool = False,
 ) -> list[dict[str, Any]]:
     """List notifications for a workspace."""
-    query = db.table(NOTIFICATIONS_TABLE).select("*").eq("workspace_id", workspace_id)
-    if unread_only:
-        query = query.eq("is_read", False)
-    result = query.order("created_at", desc=True).limit(limit).execute()
-    return list(result.data)
+    try:
+        query = db.table(NOTIFICATIONS_TABLE).select("*").eq("workspace_id", workspace_id)
+        if unread_only:
+            query = query.eq("is_read", False)
+        result = query.order("created_at", desc=True).limit(limit).execute()
+        return list(result.data)
+    except APIError:
+        logger.warning("notifications table not found — returning empty list")
+        return []
 
 
-def create_notification(db: Client, notification_data: dict[str, Any]) -> dict[str, Any]:
-    """Create a new notification."""
-    result = db.table(NOTIFICATIONS_TABLE).insert(notification_data).execute()
-    return result.data[0]
+def create_notification(db: Client, notification_data: dict[str, Any]) -> dict[str, Any] | None:
+    """Create a new notification. Returns None if the table does not exist."""
+    try:
+        result = db.table(NOTIFICATIONS_TABLE).insert(notification_data).execute()
+        return result.data[0]
+    except APIError:
+        logger.warning("notifications table not found — skipping insert")
+        return None
 
 
 def update_notification(db: Client, notification_id: int, update_data: dict[str, Any]) -> dict[str, Any] | None:
     """Update a notification."""
-    result = db.table(NOTIFICATIONS_TABLE).update(update_data).eq("id", notification_id).execute()
-    return result.data[0] if result.data else None
+    try:
+        result = db.table(NOTIFICATIONS_TABLE).update(update_data).eq("id", notification_id).execute()
+        return result.data[0] if result.data else None
+    except APIError:
+        logger.warning("notifications table not found — skipping update")
+        return None
 
 
 def delete_notification(db: Client, notification_id: int) -> None:
     """Delete a notification."""
+    try:
+        db.table(NOTIFICATIONS_TABLE).delete().eq("id", notification_id).execute()
+    except APIError:
+        logger.warning("notifications table not found — skipping delete")
     db.table(NOTIFICATIONS_TABLE).delete().eq("id", notification_id).execute()
 
 
@@ -69,26 +90,37 @@ def list_activity_logs_for_workspace(
     offset: int = 0,
 ) -> list[dict[str, Any]]:
     """List activity logs for a workspace."""
-    result = (
-        db.table(ACTIVITY_LOGS_TABLE)
-        .select("*")
-        .eq("workspace_id", workspace_id)
-        .order("created_at", desc=True)
-        .range(offset, offset + limit - 1)
-        .execute()
-    )
-    return list(result.data)
+    try:
+        result = (
+            db.table(ACTIVITY_LOGS_TABLE)
+            .select("*")
+            .eq("workspace_id", workspace_id)
+            .order("created_at", desc=True)
+            .range(offset, offset + limit - 1)
+            .execute()
+        )
+        return list(result.data)
+    except APIError:
+        logger.warning("activity_logs table not found — returning empty list")
+        return []
 
 
-def create_activity_log(db: Client, log_data: dict[str, Any]) -> dict[str, Any]:
-    """Create a new activity log."""
-    result = db.table(ACTIVITY_LOGS_TABLE).insert(log_data).execute()
-    return result.data[0]
+def create_activity_log(db: Client, log_data: dict[str, Any]) -> dict[str, Any] | None:
+    """Create a new activity log. Returns None if the table does not exist."""
+    try:
+        result = db.table(ACTIVITY_LOGS_TABLE).insert(log_data).execute()
+        return result.data[0]
+    except APIError:
+        logger.warning("activity_logs table not found — skipping insert")
+        return None
 
 
 def delete_activity_log(db: Client, log_id: int) -> None:
     """Delete an activity log."""
-    db.table(ACTIVITY_LOGS_TABLE).delete().eq("id", log_id).execute()
+    try:
+        db.table(ACTIVITY_LOGS_TABLE).delete().eq("id", log_id).execute()
+    except APIError:
+        logger.warning("activity_logs table not found — skipping delete")
 
 
 # Usage metric operations

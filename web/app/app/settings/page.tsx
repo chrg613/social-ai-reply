@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useToast } from "@/stores/toast";
 import { useAuth } from "@/components/auth/auth-provider";
 import { apiRequest, type Project, type SecretRecord, type WebhookEndpoint } from "@/lib/api";
+import { listUserKeys, saveUserKey, deleteUserKey, type UserKey } from "@/lib/api/user-keys";
 import { deleteProject, getProjects, updateProject } from "@/lib/api/projects";
 import {
   downloadWorkspaceExport,
@@ -67,6 +68,12 @@ export default function SettingsPage() {
   const [newSecret, setNewSecret] = useState({ provider: "openai", label: "", value: "" });
   const [deleteSecretId, setDeleteSecretId] = useState<number | null>(null);
 
+  // BYOK state
+  const [userKeys, setUserKeys] = useState<UserKey[]>([]);
+  const [byokOpenRouter, setByokOpenRouter] = useState("");
+  const [byokRapidApi, setByokRapidApi] = useState("");
+  const [savingByok, setSavingByok] = useState<string | null>(null);
+
   // Integrations tab state
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
   const [newWebhook, setNewWebhook] = useState({
@@ -104,18 +111,20 @@ export default function SettingsPage() {
   async function loadData() {
     if (!token) return;
     try {
-      const [webhookRows, secretRows, redditRows, workspaceRow, profileRow, projectRows] = await Promise.all([
+      const [webhookRows, secretRows, redditRows, workspaceRow, profileRow, projectRows, userKeyRows] = await Promise.all([
         apiRequest<WebhookEndpoint[]>("/v1/webhooks", {}, token),
         apiRequest<SecretRecord[]>("/v1/secrets", {}, token),
         getRedditAccounts(token).catch(() => [] as RedditAccount[]),
         getWorkspace(token).catch(() => null),
         getProfile(token).catch(() => null),
         getProjects(token).catch(() => [] as Project[]),
+        listUserKeys(token).catch(() => [] as UserKey[]),
       ]);
       setWebhooks(webhookRows);
       setSecrets(secretRows);
       setRedditAccounts(redditRows);
       setProjects(projectRows);
+      setUserKeys(userKeyRows);
       setProjectDraftName(
         Object.fromEntries(projectRows.map((p) => [p.id, p.name])),
       );
@@ -134,6 +143,43 @@ export default function SettingsPage() {
       }
     } catch (err) {
       toast.error("Failed to load settings", err instanceof Error ? err.message : undefined);
+    }
+  }
+
+  async function handleSaveByok(keyType: "openrouter" | "rapidapi") {
+    if (!token) return;
+    const value = keyType === "openrouter" ? byokOpenRouter : byokRapidApi;
+    if (!value.trim()) {
+      toast.error("Please enter a valid API key");
+      return;
+    }
+    setSavingByok(keyType);
+    try {
+      await saveUserKey(token, keyType, value.trim());
+      toast.success(`${keyType === "openrouter" ? "OpenRouter" : "RapidAPI"} key saved`);
+      if (keyType === "openrouter") setByokOpenRouter("");
+      else setByokRapidApi("");
+      const updated = await listUserKeys(token).catch(() => [] as UserKey[]);
+      setUserKeys(updated);
+    } catch (err) {
+      toast.error("Failed to save key", err instanceof Error ? err.message : undefined);
+    } finally {
+      setSavingByok(null);
+    }
+  }
+
+  async function handleDeleteByok(keyType: string) {
+    if (!token) return;
+    setSavingByok(keyType);
+    try {
+      await deleteUserKey(token, keyType);
+      toast.success(`${keyType === "openrouter" ? "OpenRouter" : "RapidAPI"} key removed`);
+      const updated = await listUserKeys(token).catch(() => [] as UserKey[]);
+      setUserKeys(updated);
+    } catch (err) {
+      toast.error("Failed to remove key", err instanceof Error ? err.message : undefined);
+    } finally {
+      setSavingByok(null);
     }
   }
 
@@ -587,6 +633,114 @@ export default function SettingsPage() {
         {/* API KEYS TAB */}
         <TabsContent value="api-keys">
           <div className="mt-6 grid gap-8">
+            {/* BYOK — Bring Your Own Key */}
+            <section>
+              <h3 className="mb-1 text-sm font-semibold text-foreground">Your Keys (BYOK)</h3>
+              <p className="mb-4 text-xs text-muted-foreground">
+                Provide your own API keys to use your own accounts for LLM generation and social data scraping.
+                Keys are encrypted at rest and never shown after saving.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* OpenRouter */}
+                <Card className="p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10">
+                      <Key className="h-4 w-4 text-emerald-500" />
+                    </div>
+                    <div>
+                      <strong className="text-sm font-medium text-foreground">OpenRouter</strong>
+                      <p className="text-xs text-muted-foreground">LLM provider for AI generation</p>
+                    </div>
+                    {userKeys.find(k => k.key_type === "openrouter") && (
+                      <Badge variant="secondary" className="ml-auto text-xs">Active</Badge>
+                    )}
+                  </div>
+                  {userKeys.find(k => k.key_type === "openrouter") ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground flex-1">Key is set and encrypted</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={savingByok === "openrouter"}
+                        onClick={() => handleDeleteByok("openrouter")}
+                      >
+                        {savingByok === "openrouter" && <Loader2 className="h-3 w-3 animate-spin" />}
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        placeholder="sk-or-..."
+                        value={byokOpenRouter}
+                        onChange={(e) => setByokOpenRouter(e.target.value)}
+                        className="text-sm"
+                      />
+                      <Button
+                        size="sm"
+                        disabled={savingByok === "openrouter" || !byokOpenRouter.trim()}
+                        onClick={() => handleSaveByok("openrouter")}
+                      >
+                        {savingByok === "openrouter" && <Loader2 className="h-3 w-3 animate-spin" />}
+                        <Save className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                </Card>
+
+                {/* RapidAPI */}
+                <Card className="p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10">
+                      <Key className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div>
+                      <strong className="text-sm font-medium text-foreground">RapidAPI</strong>
+                      <p className="text-xs text-muted-foreground">Social data scraping</p>
+                    </div>
+                    {userKeys.find(k => k.key_type === "rapidapi") && (
+                      <Badge variant="secondary" className="ml-auto text-xs">Active</Badge>
+                    )}
+                  </div>
+                  {userKeys.find(k => k.key_type === "rapidapi") ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground flex-1">Key is set and encrypted</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={savingByok === "rapidapi"}
+                        onClick={() => handleDeleteByok("rapidapi")}
+                      >
+                        {savingByok === "rapidapi" && <Loader2 className="h-3 w-3 animate-spin" />}
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        placeholder="Your RapidAPI key"
+                        value={byokRapidApi}
+                        onChange={(e) => setByokRapidApi(e.target.value)}
+                        className="text-sm"
+                      />
+                      <Button
+                        size="sm"
+                        disabled={savingByok === "rapidapi" || !byokRapidApi.trim()}
+                        onClick={() => handleSaveByok("rapidapi")}
+                      >
+                        {savingByok === "rapidapi" && <Loader2 className="h-3 w-3 animate-spin" />}
+                        <Save className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                </Card>
+              </div>
+            </section>
+
+            <Separator />
+
             <section>
               <h3 className="mb-4 text-sm font-semibold text-foreground">Add API Key</h3>
               <form onSubmit={createSecret} className="grid gap-4">

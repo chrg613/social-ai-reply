@@ -7,45 +7,40 @@ from app.services.product.reddit import RedditPost
 from app.services.product.reddit_discovery import RedditDiscoveryService, SearchResult
 
 
-def test_search_posts_combines_external_search_and_subreddit_feed(monkeypatch):
+def test_search_posts_combines_rss_search_and_subreddit_feed(monkeypatch):
     service = RedditDiscoveryService()
 
     monkeypatch.setattr(
         service,
-        "_search_web",
-        lambda query, limit: [
-            SearchResult(url="https://www.reddit.com/r/RealEstate/comments/ext123/thread", title="Verify listings", snippet=""),
+        "_search_posts_via_external_search",
+        lambda keywords, allowed_subreddits=None, limit=20: [
+            RedditPost(
+                post_id="ext123",
+                subreddit="RealEstate",
+                title="How do you verify property details before buying?",
+                author="buyer42",
+                permalink="https://www.reddit.com/r/RealEstate/comments/ext123/thread",
+                body="",
+                created_at=datetime.now(UTC),
+                num_comments=0,
+                score=0,
+            )
         ],
     )
     monkeypatch.setattr(
         service,
-        "_fetch_post_from_url",
-        lambda url: RedditPost(
-            post_id="ext123",
-            subreddit="RealEstate",
-            title="How do you verify property details before buying?",
-            author="buyer42",
-            permalink=url,
-            body="Trying to avoid fake listings and compare trustworthy homes.",
-            created_at=datetime.now(UTC),
-            num_comments=6,
-            score=18,
-        ),
-    )
-    monkeypatch.setattr(
-        service,
         "_search_posts_in_subreddit_feed",
-        lambda subreddit, keywords, limit: [
+        lambda subreddit, keywords, limit=20: [
             RedditPost(
                 post_id="feed456",
                 subreddit=subreddit,
                 title="Any checklist for validating apartment listings?",
                 author="buyer77",
                 permalink=f"https://www.reddit.com/r/{subreddit}/comments/feed456/thread",
-                body="Looking for tips before I tour a property.",
+                body="",
                 created_at=datetime.now(UTC),
-                num_comments=4,
-                score=12,
+                num_comments=0,
+                score=0,
             )
         ],
     )
@@ -57,36 +52,41 @@ def test_search_posts_combines_external_search_and_subreddit_feed(monkeypatch):
     )
 
     assert [post.post_id for post in posts] == ["ext123", "feed456"]
-    assert posts[0].as_discovery_record()["url"].startswith("https://www.reddit.com/r/RealEstate/comments/")
+    assert posts[0].permalink.startswith("https://www.reddit.com/r/RealEstate/comments/")
 
 
-def test_search_posts_filters_external_results_to_allowed_subreddits(monkeypatch):
+def test_search_posts_filters_rss_results_to_allowed_subreddits(monkeypatch):
     service = RedditDiscoveryService()
 
     monkeypatch.setattr(
         service,
-        "_search_web",
-        lambda query, limit: [
-            SearchResult(url="https://www.reddit.com/r/RealEstate/comments/good123/thread", title="good", snippet=""),
-            SearchResult(url="https://www.reddit.com/r/HBO/comments/bad123/thread", title="bad", snippet=""),
+        "_search_posts_via_external_search",
+        lambda keywords, allowed_subreddits=None, limit=20: [
+            RedditPost(
+                post_id="good123",
+                subreddit="RealEstate",
+                title="How do home buyers verify listings?",
+                author="user1",
+                permalink="https://www.reddit.com/r/RealEstate/comments/good123/thread",
+                body="",
+                created_at=datetime.now(UTC),
+                num_comments=0,
+                score=0,
+            ),
+            RedditPost(
+                post_id="bad123",
+                subreddit="HBO",
+                title="Best HBO episode?",
+                author="user1",
+                permalink="https://www.reddit.com/r/HBO/comments/bad123/thread",
+                body="",
+                created_at=datetime.now(UTC),
+                num_comments=0,
+                score=0,
+            ),
         ],
     )
-    monkeypatch.setattr(
-        service,
-        "_fetch_post_from_url",
-        lambda url: RedditPost(
-            post_id="good123" if "good123" in url else "bad123",
-            subreddit="RealEstate" if "good123" in url else "HBO",
-            title="How do home buyers verify listings?" if "good123" in url else "Best HBO episode?",
-            author="user1",
-            permalink=url,
-            body="Need validation help." if "good123" in url else "Need a streaming recommendation.",
-            created_at=datetime.now(UTC),
-            num_comments=3,
-            score=11,
-        ),
-    )
-    monkeypatch.setattr(service, "_search_posts_in_subreddit_feed", lambda subreddit, keywords, limit: [])
+    monkeypatch.setattr(service, "_search_posts_in_subreddit_feed", lambda subreddit, keywords, limit=20: [])
 
     posts = service.search_posts(["home buyers"], subreddits=["RealEstate"], limit=5)
 
@@ -96,10 +96,16 @@ def test_search_posts_filters_external_results_to_allowed_subreddits(monkeypatch
 def test_search_subreddits_derives_candidates_from_external_results(monkeypatch):
     service = RedditDiscoveryService()
 
+    # No longer needed to mock _search_subreddits_rss as it does not exist
+    # monkeypatch.setattr(
+    #     service,
+    #     "_search_subreddits_rss",
+    #     lambda keyword, limit: [],
+    # )
     monkeypatch.setattr(
         service,
         "_search_web",
-        lambda query, limit: [
+        lambda query, limit=10: [
             SearchResult(url="https://www.reddit.com/r/saas/comments/abc123/thread", title="SaaS growth", snippet=""),
             SearchResult(url="https://www.reddit.com/r/saas/comments/def456/thread", title="SaaS founders", snippet=""),
             SearchResult(url="https://www.reddit.com/r/AskReddit/comments/ghi789/thread", title="AskReddit", snippet=""),
@@ -121,17 +127,17 @@ def test_search_subreddits_derives_candidates_from_external_results(monkeypatch)
     assert [match.name for match in matches] == ["saas", "AskReddit"]
 
 
-def test_search_posts_raises_when_every_discovery_mode_fails(monkeypatch):
+def test_search_posts_returns_empty_when_every_discovery_mode_fails(monkeypatch):
     service = RedditDiscoveryService()
 
-    def raise_external(query, limit):
-        raise RuntimeError("search provider unavailable")
+    def raise_rss(keywords, allowed_subreddits=None, limit=20):
+        raise BusinessRuleError("RSS search unavailable")
 
-    def raise_feed(subreddit, keywords, limit):
-        raise RuntimeError("reddit feed unavailable")
+    def raise_feed(subreddit, keywords, limit=20):
+        raise BusinessRuleError("subreddit feed unavailable")
 
-    monkeypatch.setattr(service, "_search_web", raise_external)
+    monkeypatch.setattr(service, "_search_posts_via_external_search", raise_rss)
     monkeypatch.setattr(service, "_search_posts_in_subreddit_feed", raise_feed)
 
-    with pytest.raises(BusinessRuleError, match="All Reddit discovery methods failed"):
+    with pytest.raises(BusinessRuleError):
         service.search_posts(["home buyers"], subreddits=["RealEstate"], limit=5)

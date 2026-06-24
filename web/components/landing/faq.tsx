@@ -5,19 +5,19 @@ import { useState } from "react";
 
 const faqs = [
   {
-    question: "How does AI visibility tracking work?",
+    question: "How does SignalFlow find opportunities?",
     answer:
-      "We run targeted prompts across ChatGPT, Perplexity, Gemini, and Claude to see how each model responds when asked about your industry, product category, or brand directly. We track mentions, sentiment, citations, and competitor positioning over time.",
+      "SignalFlow scans Reddit, Twitter/X, Instagram, LinkedIn, and TikTok for conversations relevant to your brand. Our AI scores each post for buying intent, engagement potential, and rule compliance — so you only see the best opportunities.",
   },
   {
-    question: "Is Reddit posting automated?",
+    question: "Does SignalFlow auto-post on my behalf?",
     answer:
-      "No. RedditFlow generates draft replies and posts for you, but all posting is manual. You review, edit, and post from your own Reddit account. This keeps engagement authentic and compliant with Reddit's guidelines.",
+      "No. SignalFlow generates draft replies and posts for you, but all posting is manual. You review, edit, and post from your own accounts. This keeps engagement authentic and compliant with each platform's guidelines.",
   },
   {
-    question: "What Reddit rules do you check?",
+    question: "Which platforms are supported?",
     answer:
-      "Our scoring engine analyzes each subreddit's rules for self-promotion limits, required flair, posting frequency restrictions, account age requirements, and content guidelines. Every opportunity is flagged with rule compliance risks before you engage.",
+      "We currently support Reddit, Twitter/X, Instagram, TikTok, and LinkedIn. Reddit is fully powered out of the box. Other platforms use RapidAPI-based scrapers — you just need a free RapidAPI key to enable them.",
   },
   {
     question: "Is my data secure?",
@@ -30,9 +30,9 @@ const faqs = [
       "Absolutely. There are no long-term contracts. You can downgrade to the free plan or cancel entirely from your billing settings at any time. Your data remains accessible for 30 days after cancellation.",
   },
   {
-    question: "What AI models do you track?",
+    question: "What AI models power the scoring?",
     answer:
-      "We currently track ChatGPT (GPT-4), Perplexity, Google Gemini, and Claude. We're actively adding support for more models and AI-powered search engines as they emerge.",
+      "SignalFlow uses Gemini as the default AI engine for intent classification, keyword expansion, and draft generation. You can also switch to OpenAI (GPT-4), Claude, or Perplexity as alternatives.",
   },
 ];
 

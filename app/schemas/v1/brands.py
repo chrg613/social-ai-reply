@@ -26,13 +26,13 @@ class BrandProfileResponse(BaseModel):
     id: int
     project_id: int
     brand_name: str
-    website_url: str | None
-    summary: str | None
-    voice_notes: str | None
-    product_summary: str | None
-    target_audience: str | None
-    call_to_action: str | None
-    business_domain: str | None
-    reddit_username: str | None
+    website_url: str | None = None
+    summary: str | None = None
+    voice_notes: str | None = None
+    product_summary: str | None = None
+    target_audience: str | None = None
+    call_to_action: str | None = None
+    business_domain: str | None = None
+    reddit_username: str | None = None
     linkedin_url: str | None
     last_analyzed_at: datetime | None = None

@@ -246,14 +246,12 @@ def ensure_default_project(supabase: Client, workspace: dict) -> dict:
     brand_profile_data = {
         "project_id": project["id"],
         "brand_name": project["name"],
-        "website_url": None,
         "summary": None,
         "voice_notes": None,
         "product_summary": None,
         "target_audience": None,
         "call_to_action": None,
         "business_domain": None,
-        "reddit_username": None,
         "linkedin_url": None,
     }
     create_brand_profile(supabase, brand_profile_data)
@@ -288,14 +286,13 @@ def ensure_default_prompts(supabase: Client, project_id: int) -> None:
     ]
 
     existing = list_prompt_templates_for_project(supabase, project_id)
-    existing_types = {p["prompt_type"] for p in existing}
+    existing_types = {p.get("prompt_type") or p.get("type") for p in existing}
 
     for prompt in defaults:
         if prompt["prompt_type"] not in existing_types:
             prompt_data = {
                 **prompt,
                 "project_id": project_id,
-                "is_default": True,
             }
             create_prompt_template(supabase, prompt_data)
 

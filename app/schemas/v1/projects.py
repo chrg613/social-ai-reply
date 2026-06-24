@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.v1.billing import SubscriptionResponse
 from app.schemas.v1.discovery import OpportunityResponse
@@ -28,6 +28,13 @@ class ProjectResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_status(cls, data: dict) -> dict:
+        if isinstance(data, dict) and "is_active" in data and "status" not in data:
+            data["status"] = "active" if data["is_active"] else "archived"
+        return data
 
 
 class SetupStatus(BaseModel):

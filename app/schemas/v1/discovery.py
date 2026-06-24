@@ -11,7 +11,7 @@ class KeywordRequest(BaseModel):
 
 
 class KeywordGenerateRequest(BaseModel):
-    count: int = Field(default=12, ge=1, le=50)
+    count: int = Field(default=55, ge=1, le=100)
 
 
 class KeywordResponse(BaseModel):
@@ -25,7 +25,6 @@ class KeywordResponse(BaseModel):
     source: str
     is_active: bool
     created_at: datetime
-    updated_at: datetime
 
 
 class SubredditRequest(BaseModel):
@@ -77,22 +76,31 @@ class ScanRequest(BaseModel):
     search_window_hours: int = Field(default=72, ge=1, le=720)
     max_posts_per_subreddit: int = Field(default=10, ge=1, le=50)
     min_score: int = Field(default=25, ge=0, le=100)
-    platform: str = Field(default="reddit", pattern="^(reddit|twitter|all)$")
+    platform: str = Field(default="reddit", pattern="^(reddit|twitter|instagram|linkedin|all)$")
+    platforms: list[str] = Field(
+        default_factory=list,
+        description="Additional platforms to scan alongside the primary platform (e.g., ['twitter', 'linkedin'])",
+    )
+    time_filter: str = Field(
+        default="week",
+        pattern="^(day|week|month|year|all)$",
+        description="How far back to search (day, week, month, year, all)",
+    )
 
 
 class ScanRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: int | str
     project_id: int
     status: str
-    search_window_hours: int
-    posts_scanned: int
-    opportunities_found: int
-    error_message: str | None
-    started_at: datetime | None
-    completed_at: datetime | None
-    created_at: datetime
+    search_window_hours: int = 0
+    posts_scanned: int = 0
+    opportunities_found: int = 0
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime | None = None
     # Incremental progress (populated while status == "running")
     subreddits_total: int | None = None
     subreddits_scanned: int | None = None
@@ -103,12 +111,12 @@ class OpportunityResponse(BaseModel):
 
     id: int
     project_id: int
-    scan_run_id: str | None
-    reddit_post_id: str
-    subreddit_name: str
-    author: str
-    title: str
-    permalink: str
+    scan_run_id: int | str | None
+    reddit_post_id: str | None = None
+    subreddit_name: str | None = None
+    author: str | None = None
+    title: str | None = None
+    permalink: str | None = None
     body_excerpt: str | None
     score: int
     status: str
@@ -117,9 +125,9 @@ class OpportunityResponse(BaseModel):
     rule_risk: list[str]
     created_at: datetime
     updated_at: datetime
-    posted_at: datetime | None
+    posted_at: datetime | None = None
     # Multi-agent platform fields
-    platform: str | None = None
+    platform: str = "reddit"
     agent_name: str | None = None
     semantic_similarity: float | None = None
     reason_relevant: str | None = None

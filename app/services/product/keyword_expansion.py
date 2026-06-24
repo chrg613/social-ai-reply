@@ -76,6 +76,16 @@ _KEYWORD_TEMPLATES: dict[str, list[str]] = {
         "{category} recommendation",
         "recommend a {category}",
     ],
+    "user_intent": [
+        "looking for {use_case}",
+        "need {use_case}",
+        "anyone know {use_case}",
+        "{use_case} recommendations",
+        "where to find {use_case}",
+        "help me find {use_case}",
+        "{use_case} in {location}",
+        "searching for {use_case}",
+    ],
     "question": [
         "how to {action} {category}",
         "what is the best way to {action}",
@@ -96,6 +106,7 @@ _TYPE_WEIGHTS: dict[str, float] = {
     "problem": 1.2,
     "feature": 1.1,
     "buying_intent": 1.4,
+    "user_intent": 1.6,
     "question": 1.0,
 }
 
@@ -313,7 +324,21 @@ class KeywordExpansionService:
                             "source": "buying intent",
                         })
 
-        # 10. Question keywords
+        # 10. User intent keywords — what end users naturally post
+        use_cases = _derive_use_cases(description, benefits, features, category)
+        for use_case in use_cases:
+            ctx = {"use_case": use_case, "location": geography}
+            for tpl in _KEYWORD_TEMPLATES["user_intent"]:
+                expanded = _expand_template(tpl, ctx)
+                if "{" not in expanded and expanded.strip():
+                    keywords.append({
+                        "keyword": expanded,
+                        "type": "user_intent",
+                        "weight": _TYPE_WEIGHTS["user_intent"],
+                        "source": f"user intent: {use_case}",
+                    })
+
+        # 11. Question keywords
         if category:
             for action in actions:
                 ctx = {"action": action, "category": category, "product_name": product_name}
@@ -445,4 +470,69 @@ def _derive_actions(description: str, benefits: list[str], features: list[str]) 
     # Fallbacks
     if not result:
         result = ["find", "manage", "solve", "improve"]
+    return result
+
+
+def _derive_use_cases(description: str, benefits: list[str], features: list[str], category: str) -> list[str]:
+    """Derive user-intent use cases from the product's value proposition.
+
+    These represent what end users would naturally search for when they need
+    the service — not the product itself, but the user's situation.
+
+    For a real estate app: "flatmate", "2BHK", "room near metro", "PG accommodation".
+    For a design tool: "poster design", "logo for startup", "social media graphics".
+    """
+    use_cases: list[str] = []
+    text = f"{description} {' '.join(benefits)} {' '.join(features)}".lower()
+
+    # Extract noun phrases that represent what users seek
+    use_case_indicators = {
+        "buy", "rent", "lease", "find", "search", "look", "need", "want",
+        "book", "hire", "get", "request", "order", "compare", "discover",
+        "browse", "explore", "list", "post", "share", "connect", "match",
+    }
+
+    words = text.split()
+    for i, word in enumerate(words):
+        cleaned = re.sub(r"[^a-z]", "", word)
+        if cleaned in use_case_indicators and i + 1 < len(words):
+            # Grab the next 1-3 words as a use-case phrase
+            phrase_words = []
+            for j in range(i + 1, min(i + 4, len(words))):
+                next_w = re.sub(r"[^a-z0-9]", "", words[j])
+                if next_w and len(next_w) > 1 and next_w not in {"the", "a", "an", "and", "or", "in", "on", "to", "for", "with", "is", "are"}:
+                    phrase_words.append(next_w)
+                else:
+                    break
+            if phrase_words:
+                use_cases.append(" ".join(phrase_words))
+
+    # Extract from benefits directly (often user-facing value props)
+    for benefit in benefits:
+        benefit_lower = benefit.lower().strip()
+        if len(benefit_lower) > 3:
+            # Trim to first clause
+            clause = benefit_lower.split(",")[0].split(".")[0].strip()[:50]
+            if clause and len(clause) > 3:
+                use_cases.append(clause)
+
+    # Add category-derived use cases
+    if category:
+        cat = category.lower()
+        use_cases.extend([
+            cat,
+            f"{cat} services",
+            f"a {cat}",
+        ])
+
+    # Deduplicate and limit
+    seen: set[str] = set()
+    result: list[str] = []
+    for uc in use_cases:
+        uc = uc.strip()
+        if uc and uc not in seen and len(uc) > 2:
+            seen.add(uc)
+            result.append(uc)
+        if len(result) >= 12:
+            break
     return result

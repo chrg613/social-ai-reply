@@ -243,6 +243,11 @@ def visibility_summary(
     workspace: dict = Depends(get_current_workspace),
     supabase: Client = Depends(get_supabase),
 ):
+    ensure_workspace_membership(supabase, workspace["id"], current_user["id"])
+    proj = get_active_project(supabase, workspace["id"], project_id)
+    if not proj:
+        raise HTTPException(404, "No active project found.")
+
     from app.db.tables.visibility import (
         count_ai_responses_with_brand_mention_for_project,
         count_ai_responses_with_model_and_mention,
@@ -250,11 +255,6 @@ def visibility_summary(
         count_prompt_runs_for_project,
         count_prompt_runs_with_model,
     )
-
-    ensure_workspace_membership(supabase, workspace["id"], current_user["id"])
-    proj = get_active_project(supabase, workspace["id"], project_id)
-    if not proj:
-        raise HTTPException(404, "No active project found.")
 
     # N+1 FIX: Batch count queries instead of N+1 queries
     total_runs = count_prompt_runs_for_project(supabase, proj["id"])

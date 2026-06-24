@@ -57,9 +57,10 @@ class ProductCopilot:
         opportunity: dict,
         brand: dict | None,
         prompts: list[dict],
+        platform: str | None = None,
     ) -> tuple[str, str, str]:
-        """Generate a reply draft for a Reddit opportunity."""
-        return generate_reply(opportunity, brand, prompts)
+        """Generate a reply draft for a social media opportunity."""
+        return generate_reply(opportunity, brand, prompts, platform=platform)
 
     def generate_post(self, brand: dict | None, prompts: list[dict]) -> tuple[str, str, str]:
         """Generate a Reddit post draft from brand context."""

@@ -38,7 +38,7 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    supabase_user_id: str
+    supabase_uid: str
     email: EmailStr
     full_name: str
     is_active: bool

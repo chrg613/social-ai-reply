@@ -33,7 +33,7 @@ class RedditAccountResponse(BaseModel):
     username: str
     karma: int = 0
     is_active: bool = True
-    connected_at: datetime | None = None
+    connected_at: datetime | None = Field(default=None, alias="created_at")
     message: str | None = None
 
 

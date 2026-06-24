@@ -11,6 +11,9 @@ export interface PipelineRun {
     | "discovering_keywords"
     | "finding_subreddits"
     | "scanning_opportunities"
+    | "scanning_platforms"
+    | "scanning_all"
+    | "checking_opportunities"
     | "generating_drafts"
     | "ready"
     | "executed"
@@ -60,6 +63,7 @@ export interface PipelineSubreddit {
 export interface PipelineOpportunity {
   title: string;
   subreddit: string;
+  platform: string;
   score: number;
   author: string;
 }
@@ -83,9 +87,11 @@ export async function startPipelineRun(
   token: string | null,
   websiteUrl: string,
   projectId?: number | null,
+  timeFilter?: string,
 ): Promise<PipelineRun> {
   const body: Record<string, unknown> = { website_url: websiteUrl };
   if (projectId) body.project_id = projectId;
+  if (timeFilter) body.time_filter = timeFilter;
   return apiRequest<PipelineRun>(
     "/v1/auto-pipeline/run",
     { method: "POST", body: JSON.stringify(body) },

@@ -20,7 +20,7 @@ import {
   type PostDraft,
 } from "@/lib/api/content";
 import { updateOpportunityStatus } from "@/lib/api/discovery";
-import { redditUrl, copyText } from "@/lib/reddit";
+import { copyText } from "@/lib/reddit";
 import { useToast } from "@/stores/toast";
 import { getErrorMessage } from "@/types/errors";
 
@@ -35,7 +35,7 @@ export function useDraftOps(token: string | null | undefined) {
     async (
       opportunityId: number,
       projectId?: number | null,
-      options?: { voiceProfileId?: number | null }
+      options?: { voiceProfileId?: number | null; platform?: string | null }
     ): Promise<ReplyDraft | null> => {
       if (!token) {
         return null;
@@ -44,6 +44,7 @@ export function useDraftOps(token: string | null | undefined) {
       try {
         const draft = await generateReply(token, opportunityId, projectId, null, {
           voice_profile_id: options?.voiceProfileId ?? undefined,
+          platform: options?.platform ?? undefined,
         });
         success("Response drafted");
         return draft;
@@ -72,17 +73,21 @@ export function useDraftOps(token: string | null | undefined) {
     [success, error]
   );
 
-  /** Copy text to the clipboard and open the source thread in a new tab. */
-  const copyAndOpenReddit = useCallback(
-    async (text: string, permalink: string): Promise<boolean> => {
+  /** Copy text to the clipboard and open the source post in a new tab. */
+  const copyAndOpen = useCallback(
+    async (text: string, permalink: string, platform?: string): Promise<boolean> => {
       try {
         await copyText(text);
       } catch {
         error("Failed to copy", "Clipboard access was denied.");
         return false;
       }
-      window.open(redditUrl(permalink), "_blank");
-      success("Draft copied. Reddit is opening so you can review and paste.");
+      const { platformUrl } = await import("@/lib/reddit");
+      window.open(platformUrl(permalink, platform), "_blank");
+      const platformName = platform && platform !== "reddit"
+        ? platform.charAt(0).toUpperCase() + platform.slice(1)
+        : "Reddit";
+      success(`Draft copied. ${platformName} is opening so you can review and paste.`);
       return true;
     },
     [success, error]
@@ -157,7 +162,7 @@ export function useDraftOps(token: string | null | undefined) {
     savingPost,
     generateReplyDraft,
     copyToClipboard,
-    copyAndOpenReddit,
+    copyAndOpen,
     markAsPosted,
     saveReplyDraft,
     savePostDraft,

@@ -13,7 +13,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         }}
       >
         <Link href="/" className="mb-4 font-heading text-2xl font-bold z-10">
-          RedditFlow
+          SignalFlow
         </Link>
         <p className="max-w-xs text-base leading-relaxed z-10" style={{ color: "var(--auth-brand-text-muted)" }}>
           Find your audience. Engage authentically. Grow on Reddit.

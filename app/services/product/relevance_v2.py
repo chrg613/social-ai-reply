@@ -100,6 +100,7 @@ class RelevanceResult:
     scoring_breakdown: dict[str, float] = field(default_factory=dict)
     intent_confidence: float = 0.0
     rule_risk: list[str] = field(default_factory=list)  # human-readable community-rule warnings
+    confidence: float = 0.0  # 0.0-1.0: how certain the scoring is about its judgment
 
 
 class RelevanceEngine:
@@ -286,6 +287,24 @@ class RelevanceEngine:
             "final_score": final_score,
         }
 
+        # ── Confidence calculation ──────────────────────────────────
+        # Confidence = how many independent signals agree.
+        # High confidence: keyword match + semantic match + intent + engagement
+        # Low confidence: only one weak signal matched.
+        signals_present = 0
+        signals_max = 5
+        if matched_keywords:
+            signals_present += 1  # keyword signal
+        if semantic_sim >= 0.3:
+            signals_present += 1  # semantic signal
+        if intent_result.confidence >= 0.5:
+            signals_present += 1  # intent signal
+        if candidate.upvotes >= 5 or candidate.comments_count >= 3:
+            signals_present += 1  # engagement signal
+        if pain_point_score >= 30:
+            signals_present += 1  # pain point signal
+        scoring_confidence = round(signals_present / signals_max, 2)
+
         return RelevanceResult(
             relevance_score=final_score,
             semantic_similarity=round(semantic_sim, 3),
@@ -298,6 +317,7 @@ class RelevanceEngine:
             scoring_breakdown=breakdown,
             intent_confidence=round(float(intent_result.confidence), 3),
             rule_risk=rule_risk,
+            confidence=scoring_confidence,
         )
 
     # ── Scoring components ───────────────────────────────────────────

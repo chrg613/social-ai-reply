@@ -72,10 +72,16 @@ def generate_reply_draft(
     # Verify workspace access
     project = get_project(supabase, workspace["id"], opportunity["project_id"])
 
-    is_valid, _score = revalidate_opportunity(supabase, project, opportunity)
-    if not is_valid:
-        update_opportunity(supabase, opportunity["id"], {"status": "ignored"})
-        raise HTTPException(status_code=422, detail="Opportunity no longer meets the relevance threshold.")
+    # Revalidation uses a Reddit-specific scoring engine (RedditPost model,
+    # topical gate). Non-Reddit opportunities (Twitter, LinkedIn, Instagram)
+    # were already scored during scanning and would always fail the Reddit
+    # revalidation gate. Skip it for them.
+    opp_platform = (opportunity.get("platform") or "reddit").lower()
+    if opp_platform == "reddit":
+        is_valid, _score = revalidate_opportunity(supabase, project, opportunity)
+        if not is_valid:
+            update_opportunity(supabase, opportunity["id"], {"status": "ignored"})
+            raise HTTPException(status_code=422, detail="Opportunity no longer meets the relevance threshold.")
 
     ensure_default_prompts(supabase, project["id"])
     prompts = list_prompt_templates_for_project(supabase, project["id"])
@@ -97,17 +103,54 @@ def generate_reply_draft(
         if monitored:
             subreddit_tone_rules = monitored.get("tone_rules")
 
+    # Resolve effective platform: explicit override > opportunity's platform > "reddit"
+    effective_platform = payload.platform or opportunity.get("platform") or "reddit"
+
+    if payload.variants > 1:
+        # Multi-variant generation
+        from app.services.product.copilot.reply import generate_reply_variants
+
+        variants = generate_reply_variants(
+            opportunity,
+            project.get("brand_profile"),
+            prompts,
+            voice_profile=voice_profile,
+            subreddit_tone_rules=subreddit_tone_rules,
+            platform=effective_platform,
+            count=payload.variants,
+        )
+        if not variants:
+            raise HTTPException(status_code=500, detail="Failed to generate any reply variants.")
+
+        # Save all variants as drafts, return the first one
+        first_draft = None
+        for i, (content, rationale, source_prompt) in enumerate(variants):
+            draft = create_reply_draft(
+                supabase,
+                {
+                    "project_id": project["id"],
+                    "opportunity_id": opportunity["id"],
+                    "content": content,
+                    "rationale": rationale,
+                    "source_prompt": source_prompt,
+                    "version": i + 1,
+                },
+            )
+            if first_draft is None:
+                first_draft = draft
+
+        update_opportunity(supabase, opportunity["id"], {"status": "drafting"})
+        return ReplyDraftResponse.model_validate(first_draft)
+
+    # Single reply (default path — unchanged behavior)
     content, rationale, source_prompt = generate_reply(
         opportunity,
         project.get("brand_profile"),
         prompts,
         voice_profile=voice_profile,
         subreddit_tone_rules=subreddit_tone_rules,
+        platform=effective_platform,
     )
-
-    # Get next version number - batch query to avoid N+1
-    existing_drafts = list_reply_drafts_for_opportunity(supabase, opportunity["id"])
-    next_version = (max((d["version"] for d in existing_drafts), default=0)) + 1
 
     draft = create_reply_draft(
         supabase,
@@ -117,7 +160,7 @@ def generate_reply_draft(
             "content": content,
             "rationale": rationale,
             "source_prompt": source_prompt,
-            "version": next_version,
+            "version": 1,
         },
     )
 
@@ -178,6 +221,8 @@ def list_reply_drafts(
                 "opportunity_subreddit": opp["subreddit_name"],
                 "permalink": opp["permalink"],
                 "body_excerpt": opp.get("body_excerpt", ""),
+                "platform": opp.get("platform", "reddit"),
+                "score": opp.get("score"),
             })
 
     # Sort by created_at descending

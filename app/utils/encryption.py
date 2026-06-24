@@ -28,7 +28,7 @@ from app.core.config import get_settings
 # Stable application-wide salt. Not secret (salts don't need to be); used so
 # that the same passphrase always derives the same Fernet key. The value is a
 # 16-byte constant string; changing it would invalidate existing ciphertext.
-_APP_SALT = b"redditflow:enc:v1"
+_APP_SALT = b"signalflow:enc:v1"
 _PBKDF2_ITERATIONS = 200_000
 
 

@@ -8,7 +8,7 @@ export type AuthPayload = {
   token_type: string;
   user: {
     id: number;
-    supabase_user_id: string;
+    supabase_uid: string;
     email: string;
     full_name: string;
     is_active: boolean;

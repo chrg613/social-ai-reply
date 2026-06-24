@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, MessageSquare, Plus, Target, Users } from "lucide-react";
+import { MessageSquare, Plus, Target, Users } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { Badge } from "@/components/ui/badge";
@@ -31,9 +31,13 @@ import { CommunitiesSection } from "@/components/discovery/communities-section";
 import { DiscoverySkeleton } from "@/components/discovery/discovery-skeleton";
 import { InboxSection } from "@/components/discovery/inbox-section";
 import { OpportunityDetailPanel } from "@/components/discovery/opportunity-detail-panel";
+import { ScanPlatformPicker } from "@/components/discovery/scan-platform-picker";
 import { ScanProgressBanner } from "@/components/discovery/scan-progress-banner";
 import { SignalsSection } from "@/components/discovery/signals-section";
 import { WorkflowStrip } from "@/components/discovery/workflow-strip";
+import { PlatformIcon } from "@/components/shared/platform-icon";
+import { platformUrl } from "@/lib/reddit";
+import { cn } from "@/lib/utils";
 
 function lastSeenKey(projectId: number): string {
   return `rf-inbox-last-seen-${projectId}`;
@@ -44,7 +48,7 @@ export default function DiscoveryPage() {
   const selectedProjectId = useSelectedProjectId();
 
   const data = useDiscoveryData(token, selectedProjectId);
-  const { project, keywords, subreddits, opportunities, campaigns, loading } = data;
+  const { project, keywords, subreddits, opportunities, campaigns, loading, initialLoading } = data;
   const scan = useScanRunner(token, project?.id, () => void data.loadAll());
   const draftOps = useDraftOps(token);
 
@@ -60,6 +64,7 @@ export default function DiscoveryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [campaignFilter, setCampaignFilter] = useState("");
   const [showCampaignModal, setShowCampaignModal] = useState(false);
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
 
   // Inbox state: explicit row selection, bulk checkboxes, last-visit marker.
   const [selectedOppId, setSelectedOppId] = useState<number | null>(null);
@@ -101,7 +106,11 @@ export default function DiscoveryPage() {
   }
 
   async function handleGenerateReply(opp: Opportunity) {
-    const draft = await draftOps.generateReplyDraft(opp.id, undefined, { voiceProfileId });
+    const oppPlatform = (opp as Record<string, unknown>).platform as string | undefined;
+    const draft = await draftOps.generateReplyDraft(opp.id, undefined, {
+      voiceProfileId,
+      platform: oppPlatform || "reddit",
+    });
     if (!draft) {
       return;
     }
@@ -137,7 +146,11 @@ export default function DiscoveryPage() {
   const filteredOpps = useMemo(
     () =>
       opportunities
-        .filter((opp) => (statusFilter ? opp.status === statusFilter : opp.status !== "rejected"))
+        .filter((opp) => {
+          if (statusFilter) return opp.status === statusFilter;
+          // Default view: only actionable items — saved/ignored/posted/rejected are processed
+          return opp.status === "new" || opp.status === "drafting";
+        })
         .filter(
           (opp) =>
             !search ||
@@ -145,8 +158,13 @@ export default function DiscoveryPage() {
             (opp.body_excerpt ?? "").toLowerCase().includes(search) ||
             sourceLabel(opp).toLowerCase().includes(search)
         )
+        .filter((opp) => {
+          if (platformFilter === "all") return true;
+          const oppPlatform = ((opp as Record<string, unknown>).platform as string || "reddit").toLowerCase();
+          return oppPlatform === platformFilter;
+        })
         .sort((a, b) => (b.score || 0) - (a.score || 0)),
-    [opportunities, statusFilter, search]
+    [opportunities, statusFilter, search, platformFilter]
   );
   // Note: campaignFilter is UI-ready but opportunities don't have campaign_id yet.
 
@@ -229,7 +247,7 @@ export default function DiscoveryPage() {
     shortcutsEnabled
   );
 
-  if (loading) {
+  if (initialLoading) {
     return <DiscoverySkeleton />;
   }
 
@@ -250,8 +268,8 @@ export default function DiscoveryPage() {
   return (
     <div className="grid gap-8">
       <PageHeader
-        title="Opportunity Radar"
-        description="Discover live Reddit conversations using a workflow shaped for broader forum, Q&A, and social comment patterns."
+        title="Social Radar"
+        description="Discover conversations across Reddit, Twitter/X, LinkedIn, and Instagram — find high-intent opportunities and draft replies."
         actions={
           <div className="flex items-center gap-2">
             <VoiceProfileSelect
@@ -266,13 +284,47 @@ export default function DiscoveryPage() {
                 Campaign
               </Button>
             )}
-            <Button onClick={() => void scan.runScan()} disabled={scanBusy || subreddits.length === 0}>
-              {scanBusy && <Loader2 className="h-4 w-4 animate-spin" />}
-              {scanBusy ? "Scanning..." : "Run Scan"}
-            </Button>
+            <ScanPlatformPicker
+              onScan={(platforms) => void scan.runScan(platforms)}
+              disabled={scanBusy}
+              scanning={scanBusy}
+            />
           </div>
         }
       />
+
+      {/* ── Platform Tabs ──────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 rounded-lg bg-muted/50 p-1 w-fit">
+        {[
+          { id: "all", label: "All Platforms", icon: null },
+          { id: "reddit", label: "Reddit", icon: "reddit" },
+          { id: "twitter", label: "Twitter/X", icon: "twitter" },
+          { id: "linkedin", label: "LinkedIn", icon: "linkedin" },
+          { id: "instagram", label: "Instagram", icon: "instagram" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setPlatformFilter(tab.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
+              platformFilter === tab.id
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+            )}
+          >
+            {tab.icon && <PlatformIcon platform={tab.icon} className="[&_svg]:h-3.5 [&_svg]:w-3.5" />}
+            {tab.label}
+            {tab.id !== "all" && (
+              <span className="text-[10px] tabular-nums opacity-60">
+                {opportunities.filter((o) => {
+                  const p = ((o as Record<string, unknown>).platform as string || "reddit").toLowerCase();
+                  return p === tab.id;
+                }).length}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
 
       {campaigns.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
@@ -325,7 +377,7 @@ export default function DiscoveryPage() {
           discovering={data.discoveringCommunities}
           canDiscover={keywords.length > 0}
           onDeleteCommunity={(community) =>
-            setDeleteTarget({ type: "subreddits", id: community.id, name: `r/${community.name}` })
+            setDeleteTarget({ type: "subreddits", id: community.id, name: community.name })
           }
         />
       </div>
@@ -379,7 +431,12 @@ export default function DiscoveryPage() {
         rationale={draftRationale}
         onClose={() => setDraftingOpp(null)}
         onCopy={(text) => void draftOps.copyToClipboard(text)}
-        onCopyAndOpen={(text, permalink) => void draftOps.copyAndOpenReddit(text, permalink)}
+        onCopyAndOpen={(text, permalink) => {
+          const opp = draftingOpp;
+          const platform = (opp as Record<string, unknown> | null)?.platform as string | undefined;
+          const url = platformUrl(permalink, platform);
+          void draftOps.copyToClipboard(text).then(() => window.open(url, "_blank"));
+        }}
         onMarkPosted={(oppId) => void handleMarkPosted(oppId)}
       />
 

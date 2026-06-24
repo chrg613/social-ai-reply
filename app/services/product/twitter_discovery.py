@@ -16,7 +16,7 @@ from app.services.infrastructure.agent_reach.twitter_adapter import parse_twitte
 if TYPE_CHECKING:
     from app.services.product.social_post import SocialPost
 
-log = logging.getLogger("redditflow.twitter_discovery")
+log = logging.getLogger("signalflow.twitter_discovery")
 
 
 class TwitterDiscoveryService:

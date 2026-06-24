@@ -333,7 +333,7 @@ def _create_test_user(mock_supabase, email: str, full_name: str, workspace_name:
 
     # Create user
     user_data = {
-        "supabase_user_id": supabase_uid,
+        "supabase_uid": supabase_uid,
         "email": email,
         "full_name": full_name,
     }
@@ -343,7 +343,6 @@ def _create_test_user(mock_supabase, email: str, full_name: str, workspace_name:
     workspace_data = {
         "name": workspace_name,
         "slug": f"{workspace_name.lower().replace(' ', '-')}-{uuid.uuid4().hex[:6]}",
-        "owner_user_id": user["id"],
     }
     workspace = create_workspace(mock_supabase, workspace_data)
 

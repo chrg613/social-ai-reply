@@ -585,7 +585,7 @@ def select_high_signal_keywords(
             continue
         specificity = keyword_specificity(normalized)
         if (
-            specificity < 32
+            specificity < 20
             and normalized not in ROLE_TERMS
             and normalized not in KNOWN_GEO_TERMS
             and normalized not in (domain_context.anchor_terms if domain_context else ())

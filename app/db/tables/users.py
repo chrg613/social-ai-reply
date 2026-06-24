@@ -11,34 +11,47 @@ if TYPE_CHECKING:
 USERS_TABLE = "account_users"
 
 
+def _map_user(user: dict[str, Any] | None) -> dict[str, Any] | None:
+    if user and "supabase_user_id" in user:
+        user = dict(user)  # copy to avoid mutating stored row (fixes mock aliasing)
+        user["supabase_uid"] = user.pop("supabase_user_id")
+    return user
+
+
 def get_user_by_id(db: Client, user_id: int) -> dict[str, Any] | None:
     """Get a user by ID."""
     result = db.table(USERS_TABLE).select("*").eq("id", user_id).execute()
-    return result.data[0] if result.data else None
+    return _map_user(result.data[0]) if result.data else None
 
 
 def get_user_by_supabase_id(db: Client, supabase_user_id: str) -> dict[str, Any] | None:
     """Get a user by Supabase user ID."""
     result = db.table(USERS_TABLE).select("*").eq("supabase_user_id", supabase_user_id).execute()
-    return result.data[0] if result.data else None
+    return _map_user(result.data[0]) if result.data else None
 
 
 def get_user_by_email(db: Client, email: str) -> dict[str, Any] | None:
     """Get a user by email."""
     result = db.table(USERS_TABLE).select("*").eq("email", email).execute()
-    return result.data[0] if result.data else None
+    return _map_user(result.data[0]) if result.data else None
 
 
 def create_user(db: Client, user_data: dict[str, Any]) -> dict[str, Any]:
     """Create a new user."""
-    result = db.table(USERS_TABLE).insert(user_data).execute()
-    return result.data[0]
+    data = dict(user_data)
+    if "supabase_uid" in data:
+        data["supabase_user_id"] = data.pop("supabase_uid")
+    result = db.table(USERS_TABLE).insert(data).execute()
+    return _map_user(result.data[0])  # type: ignore
 
 
 def update_user(db: Client, user_id: int, update_data: dict[str, Any]) -> dict[str, Any] | None:
     """Update a user."""
-    result = db.table(USERS_TABLE).update(update_data).eq("id", user_id).execute()
-    return result.data[0] if result.data else None
+    data = dict(update_data)
+    if "supabase_uid" in data:
+        data["supabase_user_id"] = data.pop("supabase_uid")
+    result = db.table(USERS_TABLE).update(data).eq("id", user_id).execute()
+    return _map_user(result.data[0]) if result.data else None
 
 
 def delete_user(db: Client, user_id: int) -> None:
@@ -59,4 +72,9 @@ def list_users_by_workspace(
         return []
 
     result = db.table(USERS_TABLE).select("*").in_("id", user_ids).execute()
-    return list(result.data)
+    users = []
+    for u in result.data:
+        mapped = _map_user(u)
+        if mapped:
+            users.append(mapped)
+    return users

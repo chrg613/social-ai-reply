@@ -9,7 +9,7 @@ import { ScoreBadge } from "@/components/shared/score-badge";
 import { cn } from "@/lib/utils";
 import type { Opportunity } from "@/lib/api";
 import { sourceLabel, sourcePlatform } from "@/lib/opportunity";
-import { redditUrl } from "@/lib/reddit";
+import { platformUrl } from "@/lib/reddit";
 
 import { humanizeStage, stageBadgeClass } from "./buying-stage";
 
@@ -63,7 +63,7 @@ export function InboxDetailPane({
 
         {/* Title */}
         <a
-          href={redditUrl(opportunity.permalink)}
+          href={platformUrl(opportunity.permalink, (opportunity as Record<string, unknown>).platform as string | undefined)}
           target="_blank"
           rel="noopener noreferrer"
           className="block text-base font-semibold leading-snug text-foreground hover:underline"
