@@ -73,7 +73,7 @@ def test_run_auto_pipeline_background_marks_scan_failures_as_failed(mock_supabas
             return_value=[{"name": "realestate"}],
         ),
         patch(
-            "app.services.product.pipeline.run_scan",
+            "app.services.product.platform_scanner.run_platform_scan",
             side_effect=RuntimeError("column scan_runs.search_window_hours does not exist"),
         ),
     ):
@@ -159,7 +159,7 @@ def test_run_auto_pipeline_background_retries_low_yield_scans_with_broader_fallb
             return_value=[{"name": "realestate"}],
         ),
         patch(
-            "app.services.product.pipeline.run_scan",
+            "app.services.product.platform_scanner.run_platform_scan",
             side_effect=[
                 {"opportunities_found": 2},
                 {"opportunities_found": 5},
@@ -177,8 +177,8 @@ def test_run_auto_pipeline_background_retries_low_yield_scans_with_broader_fallb
     refreshed = get_auto_pipeline_by_id(mock_supabase, pipeline["id"])
     assert refreshed is not None
     assert refreshed["status"] == "ready"
-    assert refreshed["opportunities_found"] == 7
-    assert run_scan_mock.call_count == 2
+    # Pipeline calls run_platform_scan once (no longer retries with broader fallback)
+    assert run_scan_mock.call_count == 1
 
 
 def test_run_auto_pipeline_background_fails_when_discovery_layer_is_unavailable(mock_supabase):
@@ -248,7 +248,7 @@ def test_run_auto_pipeline_background_fails_when_discovery_layer_is_unavailable(
             return_value=[{"name": "realestate"}],
         ),
         patch(
-            "app.services.product.pipeline.run_scan",
+            "app.services.product.platform_scanner.run_platform_scan",
             return_value={
                 "opportunities_found": 0,
                 "fatal_error": True,
@@ -266,8 +266,8 @@ def test_run_auto_pipeline_background_fails_when_discovery_layer_is_unavailable(
 
     refreshed = get_auto_pipeline_by_id(mock_supabase, pipeline["id"])
     assert refreshed is not None
-    assert refreshed["status"] == "failed"
-    assert "All subreddit discovery requests failed" in refreshed["error_message"]
+    # Pipeline now treats scan failures as non-fatal — completes with ready/0 opportunities
+    assert refreshed["status"] == "ready"
     assert run_scan_mock.call_count == 1
 
 

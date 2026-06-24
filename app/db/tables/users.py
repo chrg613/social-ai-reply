@@ -13,6 +13,7 @@ USERS_TABLE = "account_users"
 
 def _map_user(user: dict[str, Any] | None) -> dict[str, Any] | None:
     if user and "supabase_user_id" in user:
+        user = dict(user)  # copy to avoid mutating stored row (fixes mock aliasing)
         user["supabase_uid"] = user.pop("supabase_user_id")
     return user
 

@@ -137,24 +137,30 @@ def _llm_keywords_structured(
         persona_context += f"  - {p.get('name', 'Unknown')}: {p.get('role', '')} — pain points: {pain_points}\n"
 
     llm = LLMClient()
+    short_count = max(count * 2 // 5, 5)  # ~40% short
+    long_count = count - short_count        # ~60% long
     system_prompt = (
         "You are a keyword strategist for social media opportunity discovery on Reddit and Twitter.\n"
-        "Generate keywords that REAL HUMANS actually type — conversational, long-tail phrases.\n\n"
+        "Generate keywords that REAL HUMANS actually type.\n\n"
+        "CRITICAL — KEYWORD LENGTH MIX:\n"
+        f"- Generate {short_count} SHORT keywords (2-3 words) — broad terms that match many posts\n"
+        f"  (e.g., \"real estate app\", \"property listing\", \"virtual tour\", \"flatmate search\",\n"
+        "  \"house hunting\", \"rent apartment\", \"broker commission\", \"home loan\")\n"
+        f"- Generate {long_count} LONG keywords (4-8 words) — conversational, high-intent phrases\n"
+        "  (e.g., \"tired of blurry property photos\", \"best way to sell property fast\",\n"
+        "  \"looking for flatmate in Gurugram\", \"how to inspect house remotely\")\n\n"
         "KEYWORD CATEGORIES — you MUST generate keywords for ALL 5 buckets:\n"
         "1. **pain_point** (~25%) — what people say when frustrated with a problem this product solves\n"
-        '   (e.g., "tired of blurry property photos", "no time for house visits")\n'
+        '   SHORT: "broker issues", "high brokerage"  LONG: "tired of paying broker commission"\n'
         "2. **solution_seeking** (~25%) — actively looking for a tool/service like this\n"
-        '   (e.g., "virtual tour software for real estate", "best way to sell property fast")\n'
+        '   SHORT: "property app", "house finder"  LONG: "best app to find flats in Delhi"\n'
         "3. **competitor_alternative** (~15%) — comparing products or seeking alternatives\n"
-        '   (e.g., "matterport alternative india", "magicbricks vs 99acres")\n'
+        '   SHORT: "magicbricks alternative"  LONG: "magicbricks vs 99acres which is better"\n'
         "4. **general_buyer_seller** (~20%) — broader market queries from the target audience\n"
-        '   (e.g., "NRI buying property in India", "how to inspect house remotely")\n'
+        '   SHORT: "NRI property", "rental market"  LONG: "NRI buying property in India guide"\n'
         "5. **user_intent** (~15%) — what the product's END USERS would naturally post online\n"
-        "   when they have the exact need this product solves. NOT about the product\n"
-        "   itself — about the USER'S SITUATION or request.\n"
-        '   (e.g., for a real estate app: "looking for flatmate in Gurugram",\n'
-        '   "need 2BHK near metro")\n'
-        '   (e.g., for a design tool: "need to make a poster by tomorrow")\n\n'
+        "   when they have the exact need this product solves.\n"
+        '   SHORT: "need flatmate", "room available"  LONG: "looking for flatmate near metro station"\n\n'
         "PRIORITY SCORING:\n"
         "  90-100 = extreme buying intent (ready to purchase/switch)\n"
         "  70-89 = high intent (actively researching solutions)\n"
@@ -162,7 +168,8 @@ def _llm_keywords_structured(
         "  30-49 = awareness level (broad topic interest)\n\n"
         "RULES:\n"
         "- Keywords MUST sound like real things typed on Reddit/Twitter — NOT robotic SEO terms\n"
-        "- Include long-tail conversational queries (3-8 words)\n"
+        "- MUST include BOTH short broad keywords AND long conversational queries\n"
+        "- Short keywords cast a WIDE NET, long keywords are HIGH PRECISION — you need both\n"
         "- Each rationale must explain WHY this keyword signals an opportunity for the brand\n"
         "- Include competitor names if you can infer them from the domain\n"
         "- If the brand context mentions specific locations, cities, or regions, include\n"
