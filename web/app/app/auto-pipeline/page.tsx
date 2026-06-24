@@ -30,6 +30,7 @@ const PIPELINE_STEPS = [
   { key: "discovering_keywords", label: "Discovering keywords" },
   { key: "scanning_all", label: "Scanning Social Media" },
   { key: "checking_opportunities", label: "Checking opportunities" },
+  { key: "analyzing_competitors", label: "Analyzing competitor mentions" },
   { key: "generating_drafts", label: "Generating drafts" },
 ];
 

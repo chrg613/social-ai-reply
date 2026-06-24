@@ -435,6 +435,7 @@ def run_auto_pipeline_background(
         # ── Step 5d: Competitor Intelligence (83→85%) ─────────────
         log.info("Step 5d/8: Competitor intelligence scan")
         update_auto_pipeline(db, pipeline_id, {
+            "status": "analyzing_competitors",
             "progress": 83,
             "current_step": "Analyzing competitor mentions...",
         })
@@ -461,9 +462,16 @@ def run_auto_pipeline_background(
                     }
                     for o in opps_for_comp
                 ]
-                comp_mentions = asyncio.get_event_loop().run_until_complete(
-                    process_competitor_opportunities(db, project_id, post_dicts, competitors)
-                )
+                # Create a fresh event loop for the async competitor analysis.
+                # FastAPI's BackgroundTask may already have a running loop,
+                # so asyncio.get_event_loop().run_until_complete() would crash.
+                loop = asyncio.new_event_loop()
+                try:
+                    comp_mentions = loop.run_until_complete(
+                        process_competitor_opportunities(db, project_id, post_dicts, competitors)
+                    )
+                finally:
+                    loop.close()
                 log.info("Competitor intel: %d mentions detected", len(comp_mentions))
                 update_auto_pipeline(db, pipeline_id, {
                     "progress": 85,
