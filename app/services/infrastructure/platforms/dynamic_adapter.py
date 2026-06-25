@@ -181,8 +181,59 @@ class DynamicAdapter(PlatformAdapter):
                         all_posts.append(post)
 
             except Exception as e:
-                logger.error("Dynamic parsing failed for %s: %s", self.platform, e)
+                logger.warning("Pydantic AI dynamic parsing failed for %s, falling back to legacy: %s", self.platform, e)
                 parsed_list = ParsedPostList(posts=[])
+                
+            # If Pydantic AI failed, try the legacy fallback via LLMService call_json
+            if not parsed_list.posts:
+                try:
+                    from app.services.infrastructure.llm.service import LLMService
+                    llm = LLMService()
+                    fallback_prompt = (
+                        "You are an API parsing assistant. You will be provided with a raw JSON array of items "
+                        "extracted from a social media scraper.\n\n"
+                        "Extract the relevant data and return a JSON object with a single key 'posts', which is an "
+                        "array of objects matching this schema:\n"
+                        "- external_id: string (unique ID)\n"
+                        "- author_username: string\n"
+                        "- author_id: string\n"
+                        "- title: string\n"
+                        "- body: string\n"
+                        "- profile_url: string\n"
+                        "- hashtags: array of strings\n"
+                        "- upvotes: integer\n"
+                        "- comments_count: integer\n\n"
+                        "Return only the raw JSON."
+                    )
+                    payload = llm.call_json(fallback_prompt, json.dumps(items), temperature=0.2)
+                    logger.warning("Fallback payload: %s", payload)
+                    if payload and isinstance(payload, dict) and "posts" in payload:
+                        for p in payload["posts"]:
+                            if not isinstance(p, dict):
+                                continue
+                            if p.get("external_id") not in seen_ids:
+                                seen_ids.add(str(p.get("external_id")))
+                                post = UnifiedPost(
+                                    platform=self.platform,
+                                    external_id=str(p.get("external_id", "")),
+                                    author=str(p.get("author_username", "")),
+                                    author_id=str(p.get("author_id", "")),
+                                    title=str(p.get("title", "")),
+                                    body=str(p.get("body", "")),
+                                    url=str(p.get("profile_url", p.get("url", ""))),
+                                    hashtags=p.get("hashtags", []),
+                                    upvotes=int(p.get("upvotes") or 0),
+                                    comments_count=int(p.get("comments_count") or 0),
+                                    shares=0,
+                                    views=0,
+                                    created_at=None,
+                                    media_urls=[],
+                                    raw_data={},
+                                )
+                                post.compute_engagement_score()
+                                all_posts.append(post)
+                except Exception as fallback_e:
+                    logger.error("Legacy dynamic parsing fallback failed: %s", fallback_e)
 
             # Fallback naive extraction if LLM fails or returns empty list
             if not parsed_list.posts:
