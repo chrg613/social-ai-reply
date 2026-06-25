@@ -205,7 +205,7 @@ class DynamicAdapter(PlatformAdapter):
                         "- comments_count: integer\n\n"
                         "Return only the raw JSON."
                     )
-                    items_subset = items[:10]
+                    items_subset = items[:5]
                     payload = llm.call_json(fallback_prompt, json.dumps(items_subset), temperature=0.2)
                     logger.warning("Fallback payload: %s", payload)
                     logger.warning("Fallback payload: %s", payload)
