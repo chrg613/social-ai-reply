@@ -15,9 +15,11 @@
 # Optional:
 #   ENCRYPTION_KEY, STRIPE_SECRET_KEY, SMTP_* for billing/email features
 
+# Build from the repo-root Dockerfile. uv is installed inside the image from
+# Astral's official image (no `pip install uv`), so the build no longer depends
+# on a flaky PyPI wheel download.
 [build]
-builder = "nixpacks"
-buildCommand = "pip install uv && uv sync --no-dev"
+builder = "dockerfile"
 
 [deploy]
 startCommand = "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"

@@ -1,26 +1,9 @@
-# Nixpacks configuration for the Railway backend deployment.
+# Nixpacks config — LOCAL build fallback only (`nixpacks build`).
 #
-# This file explicitly pins the Python provider so Nixpacks cannot
-# misdetect the project as Node.js if any JS-adjacent file appears at
-# the repo root in the future. The frontend (web/) is deployed
-# separately on Netlify and is NOT built by this provider.
-#
-# The actual build and start commands live in railway.toml.
+# Railway builds the backend from the repo-root Dockerfile
+# (railway.toml `[build] builder = "dockerfile"`), so this file does NOT affect
+# Railway. It is retained to pin the Python provider so a local Nixpacks build
+# can't misdetect the repo as Node.js if a JS-adjacent file ever appears at the
+# root. The frontend (web/) is deployed separately on Netlify.
 
 providers = ["python"]
-
-# Nixpacks' auto-generated uv install phase runs
-#   `pip install uv==$NIXPACKS_UV_VERSION && uv sync --no-dev --frozen`
-# but in Nixpacks v1.41.0 `$NIXPACKS_UV_VERSION` resolves to an empty string
-# (a known bug), producing the invalid `pip install uv==` requirement that
-# fails the build before railway.toml's buildCommand can run.
-#
-# We fix this by OVERRIDING the install phase with an explicit, working
-# command. Per Nixpacks docs, `cmds` WITHOUT the "..." sentinel fully
-# replaces the provider's default commands for the phase — so the broken
-# `pip install uv==` is never emitted. The uv version is pinned to 0.9.17
-# (the local uv that generated uv.lock). A `.tool-versions` file is also
-# committed as a backup so the variable resolves even if a future Nixpacks
-# version changes the override/merge semantics.
-[phases.install]
-cmds = ["python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install uv==0.9.17 && uv sync --no-dev --frozen"]

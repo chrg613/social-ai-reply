@@ -22,7 +22,6 @@ dependencies = [
   "supabase>=2.15.0",
   "scikit-learn>=1.5.0",
   "numpy>=1.26.0",
-  "sentence-transformers>=5.5.1",
   "praw>=8.0.1",
 ]
 
@@ -34,10 +33,33 @@ dev = [
 video = [
   "moviepy>=2.2.1",
 ]
+embeddings = [
+  "sentence-transformers>=5.5.1",
+  # Declared directly (not just transitive via sentence-transformers) so the
+  # [tool.uv.sources] CPU-index mapping below is honored by uv when this extra
+  # is installed. uv skips optional extras by default, so this group is NOT
+  # installed in production (Dockerfile: uv sync --frozen --no-dev). Install
+  # explicitly with: uv sync --extra embeddings.
+  "torch",
+]
 
 [build-system]
 requires = ["setuptools>=69.0"]
 build-backend = "setuptools.build_meta"
+
+# CPU-only PyTorch index for the optional `embeddings` group.
+# sentence-transformers depends on torch; on Linux the default PyPI torch wheel
+# drags in ~6 GB of nvidia-* CUDA packages that are useless on Railway's
+# CPU-only instances. The CPU index ships a ~200 MB wheel with no CUDA deps.
+# The marker keeps macOS dev on the normal PyPI torch (the CPU index has no
+# macOS wheels). `explicit = true` restricts this index to torch only.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

@@ -1,0 +1,47 @@
+# Version control
+.git
+.gitignore
+
+# Python
+.venv/
+.venv_linux/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Build artifacts
+*.whl
+*.tar.gz
+dist/
+build/
+
+# Secrets — NEVER bake into the image (.env, .env 2, .env.local contain live keys).
+# Production config comes from Railway's injected environment variables.
+.env
+.env*
+!.env.example
+
+# Frontend (deployed separately on Netlify)
+web/
+package.json
+package-lock.json
+
+# Local-only data
+tests/
+exports/
+sessions/
+*.db
+*.log
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
