@@ -226,22 +226,54 @@ class LLMService:
         """True only if a real (non-template) LLM provider is configured."""
         return not self._is_template and self.is_enabled
 
+    def _get_fallback_providers(self) -> list:
+        """Return other configured providers to try if the primary one fails."""
+        try:
+            all_providers = get_configured_providers()
+            return [
+                p for name, p in all_providers.items()
+                if name != self._provider.name
+            ]
+        except Exception:
+            return []
+
     def call_json(
         self,
         system_prompt: str,
         user_content: str,
         temperature: float = 0.2,
     ) -> dict[str, Any] | list[Any] | None:
-        """Call LLM and return parsed JSON. Drop-in replacement for LLMClient.call()."""
+        """Call LLM and return parsed JSON. Drop-in replacement for LLMClient.call().
+
+        When the primary provider returns None or raises, automatically tries
+        other configured providers before giving up. This handles the common
+        case where Gemini is 429-rate-limited but OpenRouter is available.
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ]
+        # Try primary provider
         try:
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content},
-            ]
-            return self._provider.chat_json(messages, temperature=temperature)
+            result = self._provider.chat_json(messages, temperature=temperature)
+            if result is not None:
+                return result
+            logger.warning("Primary LLM provider %s returned None for call_json", self._provider.name)
         except Exception:
-            logger.exception("LLM call_json failed via %s", self._provider.name)
-            return None
+            logger.exception("LLM call_json failed via primary provider %s", self._provider.name)
+
+        # Primary failed or returned None — try fallback providers
+        for fallback in self._get_fallback_providers():
+            try:
+                logger.info("Trying fallback LLM provider %s for call_json", fallback.name)
+                result = fallback.chat_json(messages, temperature=temperature)
+                if result is not None:
+                    logger.info("Fallback provider %s succeeded for call_json", fallback.name)
+                    return result
+            except Exception:
+                logger.warning("Fallback provider %s also failed for call_json", fallback.name)
+
+        return None
 
     def call_text(
         self,
@@ -250,18 +282,41 @@ class LLMService:
         temperature: float = 0.7,
         max_tokens: int = 2048,
     ) -> str | None:
-        """Call LLM and return raw text response."""
+        """Call LLM and return raw text response.
+
+        When the primary provider returns None or raises, automatically tries
+        other configured providers before giving up.
+        """
+        messages: list[dict[str, str]] = []
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        messages.append({"role": "user", "content": prompt})
+
+        # Try primary provider
         try:
-            messages: list[dict[str, str]] = []
-            if system_message:
-                messages.append({"role": "system", "content": system_message})
-            messages.append({"role": "user", "content": prompt})
-            return self._provider.chat_text(
+            result = self._provider.chat_text(
                 messages, temperature=temperature, max_tokens=max_tokens
             )
+            if result is not None:
+                return result
+            logger.warning("Primary LLM provider %s returned None for call_text", self._provider.name)
         except Exception:
-            logger.exception("LLM call_text failed via %s", self._provider.name)
-            return None
+            logger.exception("LLM call_text failed via primary provider %s", self._provider.name)
+
+        # Primary failed or returned None — try fallback providers
+        for fallback in self._get_fallback_providers():
+            try:
+                logger.info("Trying fallback LLM provider %s for call_text", fallback.name)
+                result = fallback.chat_text(
+                    messages, temperature=temperature, max_tokens=max_tokens
+                )
+                if result is not None:
+                    logger.info("Fallback provider %s succeeded for call_text", fallback.name)
+                    return result
+            except Exception:
+                logger.warning("Fallback provider %s also failed for call_text", fallback.name)
+
+        return None
 
 
 class VisibilityRunner:

@@ -61,7 +61,7 @@ class GeminiProvider:
             resp.raise_for_status()
             return resp
 
-        return retry_http(_do_post, provider_name="Gemini")
+        return retry_http(_do_post, provider_name="Gemini", max_retries=2)
 
     def chat_json(
         self,
