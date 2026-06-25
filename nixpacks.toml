@@ -8,3 +8,12 @@
 # The actual build and start commands live in railway.toml.
 
 providers = ["python"]
+
+# Nixpacks auto-generates an install phase for uv projects that runs
+# `pip install uv==$NIXPACKS_UV_VERSION`. In Nixpacks v1.41.0 this variable is
+# left empty, producing the invalid `pip install uv==` requirement that breaks
+# the build before railway.toml's buildCommand can run. Pinning it explicitly
+# populates the variable and fixes the install phase. Keep this in sync with the
+# local uv used to regenerate uv.lock.
+[variables]
+NIXPACKS_UV_VERSION = "0.9.17"

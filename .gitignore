@@ -9,7 +9,11 @@ __pycache__/
 .ruff_cache/
 
 # Node / Frontend
+# All JS config must live under web/. Never commit a root package.json or
+# lockfile — Nixpacks may misdetect the backend as a Node project.
 node_modules/
+/package-lock.json
+/package.json
 .next/
 *.tsbuildinfo
 web/next-env.d.ts
