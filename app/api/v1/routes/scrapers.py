@@ -86,13 +86,23 @@ def scrapers_chat_endpoint(
         "Be concise and output the recommended mapping configuration."
     )
     
-    messages = [{"role": "system", "content": system_prompt}]
+    # Format messages into a single prompt string since LLMService.call_text expects a string
+    prompt_lines = []
     for msg in payload.history:
-        messages.append({"role": msg.role, "content": msg.content})
-    messages.append({"role": "user", "content": payload.message})
+        role_label = "Assistant" if msg.role == "assistant" else "User"
+        prompt_lines.append(f"{role_label}: {msg.content}")
+    
+    prompt_lines.append(f"User: {payload.message}")
+    prompt_lines.append("Assistant:")
+    
+    final_prompt = "\n\n".join(prompt_lines)
     
     llm = LLMService()
-    reply = llm.chat_text(messages, temperature=0.3)
+    reply = llm.call_text(
+        prompt=final_prompt,
+        system_message=system_prompt,
+        temperature=0.3
+    )
     if not reply:
         reply = "Sorry, I couldn't process that right now."
         
