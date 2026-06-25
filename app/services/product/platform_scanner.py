@@ -100,6 +100,9 @@ async def _async_platform_scan(
     limit_per_platform: int = 25,
     subreddits: list[str] | None = None,
     time_filter: str = "week",
+    *,
+    workspace_id: int | None = None,
+    db: Any = None,
 ) -> list[UnifiedPost]:
     """Run the PlatformRouter search asynchronously."""
     # If Reddit is included and we have subreddits, configure the adapter
@@ -110,7 +113,7 @@ async def _async_platform_scan(
         reddit_adapter = _get_adapter("reddit")
         reddit_adapter.set_subreddits(subreddits)
 
-    router = PlatformRouter(platforms=platforms)
+    router = PlatformRouter(platforms=platforms, workspace_id=workspace_id, db=db)
     return await router.search_all(
         keywords=search_keywords,
         limit_per_platform=limit_per_platform,
@@ -177,7 +180,7 @@ def run_platform_scan(
         with _cf.ThreadPoolExecutor(max_workers=1, thread_name_prefix="platform_scan") as pool:
             future = pool.submit(
                 asyncio.run,
-                _async_platform_scan(platforms, search_keywords, limit_per_platform, subreddits=subreddits, time_filter=time_filter),
+                _async_platform_scan(platforms, search_keywords, limit_per_platform, subreddits=subreddits, time_filter=time_filter, workspace_id=project.get("workspace_id"), db=db),
             )
             posts = future.result(timeout=total_timeout_seconds)
     except _cf.TimeoutError:

@@ -31,12 +31,32 @@ PLATFORM_INFO = {
 }
 
 
-def _get_adapter(platform: str) -> PlatformAdapter:
-    """Get or create a platform adapter by name."""
+def _get_adapter(platform: str, *, workspace_id: int | None = None, db: Any = None) -> PlatformAdapter:
+    """Get or create a platform adapter by name.
+
+    When ``workspace_id`` and ``db`` are provided, checks for a custom scraper
+    configuration in the database first and returns a DynamicAdapter if one
+    exists.  This is what connects the "Scraper Setup" UI to actual scanning.
+    """
     # Normalize platform name
     normalized = platform.strip().lower()
     if normalized == "x":
         normalized = "twitter"
+
+    # Check for a custom scraper configuration (DB-driven DynamicAdapter)
+    if workspace_id is not None and db is not None:
+        try:
+            from app.db.tables.custom_scrapers import get_custom_scraper_by_platform
+            custom = get_custom_scraper_by_platform(db, workspace_id, normalized)
+            if custom:
+                from app.services.infrastructure.platforms.dynamic_adapter import DynamicAdapter
+                logger.info(
+                    "Using custom scraper for %s (host=%s, endpoint=%s)",
+                    normalized, custom.get("api_host"), custom.get("search_endpoint"),
+                )
+                return DynamicAdapter(custom)
+        except Exception as exc:
+            logger.warning("Failed to load custom scraper for %s: %s", normalized, exc)
 
     if normalized not in _adapters:
         if normalized == "reddit":
@@ -52,9 +72,12 @@ def _get_adapter(platform: str) -> PlatformAdapter:
             from app.services.infrastructure.platforms.linkedin import LinkedInAdapter
             _adapters[normalized] = LinkedInAdapter()
         else:
+            # Unknown platform — check if there's a custom scraper config
+            # even without workspace context (best-effort)
             raise ValueError(
                 f"Unknown platform: {platform}. "
-                f"Supported: {', '.join(PLATFORM_INFO.keys())}"
+                f"Supported: {', '.join(PLATFORM_INFO.keys())}. "
+                f"Or set up a custom scraper for this platform."
             )
     return _adapters[normalized]
 
@@ -67,8 +90,10 @@ class PlatformRouter:
         posts = await router.search_all(keywords=["virtual tour", "real estate tech"])
     """
 
-    def __init__(self, platforms: list[str] | None = None):
+    def __init__(self, platforms: list[str] | None = None, *, workspace_id: int | None = None, db: Any = None):
         self.platforms = platforms or ["reddit"]
+        self.workspace_id = workspace_id
+        self.db = db
 
     async def search_all(
         self,
@@ -95,7 +120,7 @@ class PlatformRouter:
         per_platform_timeout = 120.0
 
         async def _search_one(platform: str) -> list[UnifiedPost]:
-            adapter = _get_adapter(platform)
+            adapter = _get_adapter(platform, workspace_id=self.workspace_id, db=self.db)
             return await asyncio.wait_for(
                 adapter.search_and_enrich(
                     keywords,
@@ -133,7 +158,7 @@ class PlatformRouter:
         limit: int = 20,
     ) -> list[Any]:
         """Get comments for a specific post on a specific platform."""
-        adapter = _get_adapter(platform)
+        adapter = _get_adapter(platform, workspace_id=self.workspace_id, db=self.db)
         return await adapter.get_post_comments(post_id, limit=limit)
 
     async def health_check_all(self) -> dict[str, bool]:
@@ -141,7 +166,7 @@ class PlatformRouter:
         results = {}
         for platform in self.platforms:
             try:
-                adapter = _get_adapter(platform)
+                adapter = _get_adapter(platform, workspace_id=self.workspace_id, db=self.db)
                 results[platform] = await adapter.health_check()
             except Exception:
                 results[platform] = False
