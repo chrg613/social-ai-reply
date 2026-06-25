@@ -205,7 +205,9 @@ class DynamicAdapter(PlatformAdapter):
                         "- comments_count: integer\n\n"
                         "Return only the raw JSON."
                     )
-                    payload = llm.call_json(fallback_prompt, json.dumps(items), temperature=0.2)
+                    items_subset = items[:10]
+                    payload = llm.call_json(fallback_prompt, json.dumps(items_subset), temperature=0.2)
+                    logger.warning("Fallback payload: %s", payload)
                     logger.warning("Fallback payload: %s", payload)
                     if payload and isinstance(payload, dict) and "posts" in payload:
                         for p in payload["posts"]:
