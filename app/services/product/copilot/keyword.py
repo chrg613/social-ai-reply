@@ -20,6 +20,51 @@ from app.services.product.relevance import (
 
 logger = logging.getLogger(__name__)
 
+async def expand_keywords(seed_keywords: list[str]) -> list[dict]:
+    """Two-stage LLM keyword expansion.
+    Given seed keywords, generates long-tail conversational variations
+    labeled with intent (pain, goal, comparison) and confidence.
+    """
+    if not seed_keywords:
+        return []
+    
+    llm = LLMClient()
+    system_prompt = (
+        "You are a market research assistant. "
+        f"Given these seed keywords: {', '.join(seed_keywords)} "
+        "Generate 5 long-tail variations for each seed, and label each with the underlying intent: "
+        "- pain (problem) "
+        "- goal (desired outcome) "
+        "- comparison (looking at alternatives). "
+        "Return ONLY a JSON array with fields: seed, keyword, intent, priority_score."
+    )
+    
+    try:
+        # Run in executor since llm.call is sync
+        import asyncio
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, lambda: llm.call(system_prompt, "", temperature=0.7))
+        
+        if not result or not isinstance(result, list):
+            return []
+            
+        valid_items: list[dict] = []
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            kw = item.get("keyword")
+            if not kw or not isinstance(kw, str) or len(kw.strip()) < 3:
+                continue
+            valid_items.append({
+                "keyword": kw.strip(),
+                "type": item.get("intent", "goal"),
+                "priority_score": int(item.get("priority_score", 50))
+            })
+        return valid_items
+    except Exception:
+        logger.exception("expand_keywords failed")
+        return [{"keyword": kw, "type": "core", "priority_score": 50} for kw in seed_keywords]
+
 
 @dataclass
 class GeneratedKeyword:

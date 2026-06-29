@@ -162,9 +162,7 @@ class RelevanceEngine:
 
         # ── Penalties ─────────────────────────────────────────────────
         spam_risk_penalty = self._spam_risk_penalty(full_text, intent_result)
-        competitor_irrelevant_penalty = self._competitor_irrelevant_penalty(
-            full_text, intent_result, brand_profile,
-        )
+        competitor_boost = self._competitor_boost(full_text, brand_profile)
         generic_content_penalty = self._generic_content_penalty(full_text, matched_keywords)
         low_confidence_penalty = self._low_confidence_penalty(intent_result)
         negative_community_rule_penalty = self._negative_community_rule_penalty(candidate)
@@ -172,7 +170,6 @@ class RelevanceEngine:
 
         penalties = (
             spam_risk_penalty
-            + competitor_irrelevant_penalty
             + generic_content_penalty
             + low_confidence_penalty
             + negative_community_rule_penalty
@@ -180,15 +177,15 @@ class RelevanceEngine:
         )
 
         base_score = (
-            keyword_score * 0.25
-            + semantic_score * 0.30
+            keyword_score * 0.20
+            + semantic_score * 0.35
             + intent_score * 0.20
             + pain_point_score * 0.10
             + source_fit_score * 0.10
             + freshness_score * 0.05
         )
 
-        final_score = max(0, min(100, int(round(base_score - penalties))))
+        final_score = max(0, min(100, int(round(base_score + competitor_boost - penalties))))
 
         # ── Feedback calibration (ported from the legacy scanner engine) ──
         calibration_delta = 0
@@ -202,8 +199,8 @@ class RelevanceEngine:
         risk_flags: list[str] = []
         if spam_risk_penalty > 0:
             risk_flags.append("spam_risk")
-        if competitor_irrelevant_penalty > 0:
-            risk_flags.append("competitor_mention_without_context")
+        if competitor_boost > 0:
+            risk_flags.append("competitor_mention_boosted")
         if generic_content_penalty > 0:
             risk_flags.append("generic_content")
         if low_confidence_penalty > 0:
@@ -277,7 +274,7 @@ class RelevanceEngine:
             "freshness_score": round(freshness_score, 2),
             "base_score": round(base_score, 2),
             "spam_risk_penalty": spam_risk_penalty,
-            "competitor_irrelevant_penalty": competitor_irrelevant_penalty,
+            "competitor_boost": competitor_boost,
             "generic_content_penalty": generic_content_penalty,
             "low_confidence_penalty": low_confidence_penalty,
             "negative_community_rule_penalty": negative_community_rule_penalty,
@@ -372,18 +369,37 @@ class RelevanceEngine:
         self,
         candidate: CandidatePost,
         brand_profile: dict[str, Any],
+        keywords: list[dict[str, Any]] | None = None,
     ) -> float:
-        """Compute cosine similarity between brand description and post text."""
+        """Compute max cosine similarity between keyword embeddings and post text."""
+        post_text = f"{candidate.title} {candidate.body}".strip()
+        if not post_text:
+            return 0.0
+
+        # Create tiny FAISS-like index per run
+        if keywords:
+            try:
+                best_sim = 0.0
+                for kw in keywords:
+                    kw_text = str(kw.get("keyword", "")).strip()
+                    if kw_text:
+                        sim = self._embedding.similarity(kw_text, post_text)
+                        if sim > best_sim:
+                            best_sim = sim
+                if best_sim > 0.0:
+                    return best_sim
+            except Exception as exc:
+                logger.warning("Keyword embedding similarity failed (%s); falling back.", exc)
+
+        # Fallback to brand text
         brand_text = " ".join(filter(None, [
             brand_profile.get("name", ""),
             brand_profile.get("description", ""),
             " ".join(brand_profile.get("pain_points", [])),
             brand_profile.get("key_benefits", ""),
-        ]))
-        brand_text = brand_text.strip()
-        post_text = f"{candidate.title} {candidate.body}".strip()
+        ])).strip()
 
-        if not brand_text or not post_text:
+        if not brand_text:
             return 0.0
 
         try:
@@ -487,25 +503,23 @@ class RelevanceEngine:
                 spam_signals += 1
         return min(spam_signals * 5, 10.0)
 
-    def _competitor_irrelevant_penalty(
+    def _competitor_boost(
         self,
         full_text: str,
-        intent_result: IntentResult,
         brand_profile: dict[str, Any],
     ) -> float:
+        """Boost score if competitors are mentioned."""
         competitors = brand_profile.get("competitors", [])
         if not competitors:
             return 0.0
         comp_mentions = sum(
             1 for c in competitors
-            if normalize_phrase(c) in full_text
+            if c and normalize_phrase(c) in full_text
         )
         if comp_mentions == 0:
             return 0.0
-        # If intent is already alternative/complaint, no penalty
-        if intent_result.intent in ("looking_for_alternative", "complaining_about_competitor"):
-            return 0.0
-        return min(comp_mentions * 5, 10.0)
+        # Give +10 points per competitor mention, capped at 20
+        return min(comp_mentions * 10.0, 20.0)
 
     @staticmethod
     def _generic_content_penalty(full_text: str, matched_keywords: list[str]) -> float:

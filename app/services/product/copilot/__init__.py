@@ -12,7 +12,7 @@ from app.services.product.copilot.inference import (
     infer_business_domain,
     infer_cta,
 )
-from app.services.product.copilot.keyword import GeneratedKeyword, generate_keywords
+from app.services.product.copilot.keyword import GeneratedKeyword, generate_keywords, expand_keywords
 from app.services.product.copilot.llm_client import LLMClient
 from app.services.product.copilot.persona import suggest_personas
 from app.services.product.copilot.post import generate_post, generate_post_async
@@ -31,6 +31,7 @@ __all__ = [
     # Keyword
     "GeneratedKeyword",
     "generate_keywords",
+    "expand_keywords",
     # Reply
     "generate_reply",
     "generate_reply_async",

@@ -194,21 +194,33 @@ async def run_full_pipeline_stream(url: str, workspace: dict, supabase: Any) -> 
                 yield _log(f"Failed to save personas: {exc}", "warn")
 
     if not kws_db:
-        yield _log("Generating search keywords…")
-        from app.services.product.copilot import generate_keywords
+        yield _log("Generating seed search keywords…")
+        from app.services.product.copilot import generate_keywords, expand_keywords
         generated = await loop.run_in_executor(
             None,
             lambda: generate_keywords({
                 "brand_name": enriched.get("name", ""),
                 "summary": enriched.get("extracted_summary", ""),
                 "product_summary": enriched.get("description", ""),
-            }, personas_list),
+            }, personas_list, count=10),  # Generate 10 seeds
         )
-        kws_list = [
-            {"keyword": kw.keyword if hasattr(kw, "keyword") else str(kw), "type": getattr(kw, "category", "core"), "priority": getattr(kw, "priority_score", 5)}
+        seed_keywords = [
+            kw.keyword if hasattr(kw, "keyword") else str(kw)
             for kw in generated
+        ][:5]  # Take top 5 seeds
+        
+        yield _log(f"Expanding {len(seed_keywords)} seed keywords into conversational variants…")
+        expanded = await expand_keywords(seed_keywords)
+        
+        kws_list = [
+            {"keyword": kw["keyword"], "type": kw["type"], "priority": kw["priority_score"]}
+            for kw in expanded
         ]
-        yield _log(f"Generated {len(kws_list)} keywords.", "success")
+        
+        if not kws_list:
+            kws_list = [{"keyword": s, "type": "core", "priority": 50} for s in seed_keywords]
+
+        yield _log(f"Generated {len(kws_list)} expanded keywords.", "success")
         yield _data("keywords_count", len(kws_list))
 
         if project_id:

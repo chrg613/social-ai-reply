@@ -13,7 +13,7 @@ from app.services.product.copilot.analyzer import (
     analyze_website_async,
 )
 from app.services.product.copilot.inference import infer_audience, infer_business_domain, infer_cta
-from app.services.product.copilot.keyword import GeneratedKeyword, generate_keywords
+from app.services.product.copilot.keyword import GeneratedKeyword, expand_keywords, generate_keywords
 from app.services.product.copilot.llm_client import LLMClient
 from app.services.product.copilot.persona import suggest_personas
 from app.services.product.copilot.post import generate_post, generate_post_async
@@ -164,9 +164,11 @@ __all__ = [
     "analyze_website",
     "suggest_personas",
     "generate_keywords",
+    "expand_keywords",
     "generate_reply",
     "generate_post",
     "infer_audience",
-    "infer_cta",
     "infer_business_domain",
+    "infer_cta",
+    "GeneratedKeyword",
 ]
