@@ -230,10 +230,14 @@ class LLMService:
         """Return other configured providers to try if the primary one fails."""
         try:
             all_providers = get_configured_providers()
-            return [
+            fallbacks = [
                 p for name, p in all_providers.items()
                 if name != self._provider.name
             ]
+            if self._provider.name != "template":
+                from app.services.infrastructure.llm.providers.template_provider import TemplateProvider
+                fallbacks.append(TemplateProvider())
+            return fallbacks
         except Exception:
             return []
 

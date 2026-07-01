@@ -114,10 +114,14 @@ def resolve_brand_context(db: Client, workspace_id: int, project_id: int) -> dic
 
     Returns ``None`` only if neither source has any data at all.
     """
-    from app.db.tables.company import get_company_by_workspace
+    from app.db.tables.company import get_company_by_id
+
+    # Get the project to find its company_id
+    project_result = db.table(PROJECTS_TABLE).select("company_id").eq("id", project_id).execute()
+    project_company_id = project_result.data[0].get("company_id") if project_result.data else None
 
     bp = get_brand_profile_by_project(db, project_id) or {}
-    cp = get_company_by_workspace(db, workspace_id) or {}
+    cp = get_company_by_id(db, project_company_id) if project_company_id else {}
 
     if not bp and not cp:
         return None

@@ -57,13 +57,14 @@ class TemplateProvider:
 
         More specific patterns are checked first to avoid false matches.
         """
+        return self._determine_use_case(text)
     def _determine_use_case(self, text: str) -> str:
         text_lower = text.lower()
         if any(k in text_lower for k in ("reply draft", "draft a reply", "generate a reply", "reddit post", "write a professional linkedin comment")):
             return "reply_draft"
         if any(k in text_lower for k in ("post draft", "draft a post", "social media post", "generate a post")):
             return "post_draft"
-        if any(k in text_lower for k in ("website analysis", "brand analysis", "analyze this website", "brand profile")):
+        if any(k in text_lower for k in ("website analysis", "brand analysis", "analyze this website", "brand profile", "extract structured data about a company from its website text", "analyze the following website")):
             return "website_analysis"
         import re
         if re.search(r"\bpersonas?\b", text_lower) or any(k in text_lower for k in ("target audience", "audience profile")):
@@ -133,10 +134,14 @@ class TemplateProvider:
         if use_case == "website_analysis":
             return {
                 "brand_name": brand,
-                "product_description": f"{brand} is a solution focused on solving problems related to {topic}.",
-                "target_audience": f"People interested in {topic}",
+                "product_summary": f"{brand} is a solution focused on solving problems related to {topic}.",
+                "icp": f"People interested in {topic}",
+                "industry": "Software",
+                "tone_of_voice": "Professional and helpful",
                 "key_benefits": ["Saves time", "Improves accuracy", "Easy to use"],
-                "tone": "Professional and helpful",
+                "pain_points_solved": ["Inefficient workflows", "Lack of reliable tools"],
+                "competitors": ["Competitor A", "Competitor B"],
+                "common_keywords": [f"{topic} tool", f"{brand} alternative"]
             }
         if use_case == "persona_generation":
             return {

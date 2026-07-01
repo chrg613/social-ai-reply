@@ -59,8 +59,8 @@ def _run_full_pipeline_background(company_id: int) -> None:
         logger.info("[Auto Pipeline v2] Keyword expansion completed (%s keywords)", len(keywords))
 
         logger.info("[Auto Pipeline v2] Starting all agents for company %s", company_id)
-        scheduler = SchedulerService(supabase)
-        scheduler.run_all(company_id)
+        scheduler = SchedulerService()
+        scheduler.run_all(company_id, supabase)
         logger.info("[Auto Pipeline v2] All agents triggered for company %s", company_id)
 
     except Exception:

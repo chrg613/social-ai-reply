@@ -12,7 +12,9 @@ export function CompanyNav() {
     { href: "/app/persona", label: "Target Personas" },
     { href: "/app/brand-brain", label: "Brand Brain" },
     { href: "/app/competitors", label: "Competitor Intel" },
+    { href: "/app/seo-geo", label: "SEO & Geo Audit" },
     { href: "/app/sources", label: "Sources" },
+    { href: "/app/agent-runs", label: "Agent Runs" },
     { href: "/app/pipeline-runs", label: "Run History" },
   ];
 
