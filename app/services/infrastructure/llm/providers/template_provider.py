@@ -57,14 +57,16 @@ class TemplateProvider:
 
         More specific patterns are checked first to avoid false matches.
         """
+    def _determine_use_case(self, text: str) -> str:
         text_lower = text.lower()
-        if any(k in text_lower for k in ("reply draft", "draft a reply", "generate a reply", "reddit post")):
+        if any(k in text_lower for k in ("reply draft", "draft a reply", "generate a reply", "reddit post", "write a professional linkedin comment")):
             return "reply_draft"
         if any(k in text_lower for k in ("post draft", "draft a post", "social media post", "generate a post")):
             return "post_draft"
         if any(k in text_lower for k in ("website analysis", "brand analysis", "analyze this website", "brand profile")):
             return "website_analysis"
-        if any(k in text_lower for k in ("persona", "target audience", "audience profile")):
+        import re
+        if re.search(r"\bpersonas?\b", text_lower) or any(k in text_lower for k in ("target audience", "audience profile")):
             return "persona_generation"
         if any(k in text_lower for k in ("article brief", "blog brief", "content brief")):
             return "article_brief"

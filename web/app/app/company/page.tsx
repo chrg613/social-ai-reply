@@ -1,8 +1,6 @@
 "use client";
-
 import { FormEvent, useEffect, useState, useRef } from "react";
 import { Loader2, Globe, Users, Target, Sparkles, Save, Zap } from "lucide-react";
-
 import { useAuth } from "@/components/auth/auth-provider";
 import { useToast } from "@/stores/toast";
 import { Button } from "@/components/ui/button";
@@ -22,12 +20,8 @@ import {
 } from "@/lib/api/company";
 import { startAutoPipelineV2 } from "@/lib/api/auto-pipeline-v2";
 import { CompanyNav } from "@/components/company/company-nav";
-import { useSelectedProjectId } from "@/hooks/use-selected-project";
-import { useProjectStore } from "@/stores/project-store";
-
 export default function CompanyPage() {
   const { token } = useAuth();
-  const selectedProjectId = useSelectedProjectId();
   const { success, error } = useToast();
   const [loading, setLoading] = useState(true);
   const [company, setCompany] = useState<CompanyProfile | null>(null);
@@ -36,7 +30,6 @@ export default function CompanyPage() {
   const [autoUrl, setAutoUrl] = useState("");
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const analysisPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   // Clean up polling interval when the component unmounts to prevent
   // background polling leaks and state updates after unmount (Issue: PR review).
   useEffect(() => {
@@ -47,33 +40,21 @@ export default function CompanyPage() {
       }
     };
   }, []);
-
   useEffect(() => {
     if (!token) return;
     void loadCompany();
-  }, [token, selectedProjectId]);
-
+  }, [token]);
   async function loadCompany() {
     setLoading(true);
     try {
       const companies = await getCompanies(token!);
-      let active = null;
-      if (selectedProjectId) {
-        const project = useProjectStore.getState().projects.find(p => p.id === selectedProjectId);
-        if (project?.company_id) {
-          active = companies.find((c) => c.id === project.company_id) || null;
-        }
-      }
-      if (!active) {
-        active = companies.find((c) => c.is_active) ?? companies[0] ?? null;
-      }
+      const active = companies.find((c) => c.is_active) ?? companies[0] ?? null;
       setCompany(active);
     } catch (err) {
       error("Failed to load company", err instanceof Error ? err.message : "Unknown error");
     }
     setLoading(false);
   }
-
   function buildPayload(): Record<string, unknown> {
     if (!company) return {};
     // Only send fields the backend expects (strip id, workspace_id, timestamps, etc.)
@@ -89,12 +70,8 @@ export default function CompanyPage() {
       is_active: _ia,
       ...payload
     } = company;
-    if (selectedProjectId && !_id) {
-      (payload as any).project_id = selectedProjectId;
-    }
     return payload;
   }
-
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token || !company) return;
@@ -115,7 +92,6 @@ export default function CompanyPage() {
     }
     setIsSaving(false);
   }
-
   async function handleAnalyze() {
     if (!token || !company?.id) return;
     setIsAnalyzing(true);
@@ -127,7 +103,6 @@ export default function CompanyPage() {
     try {
       const res = await analyzeCompanyWebsite(token, company.id);
       success("Analysis started", `Run ID: ${res.run_id}`);
-
       // Poll for results every 3 seconds for up to 2 minutes (Issue #26).
       // The interval is stored in a ref so the unmount effect can clear it.
       const companyId = company.id;
@@ -174,7 +149,6 @@ export default function CompanyPage() {
       setIsAnalyzing(false);
     }
   }
-
   async function handleAutoPipeline(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token || !autoUrl.trim()) return;
@@ -187,11 +161,7 @@ export default function CompanyPage() {
     }
     
     try {
-      const payload: any = { website_url: autoUrl.trim() };
-      if (selectedProjectId) {
-        payload.project_id = selectedProjectId;
-      }
-      const res = await startAutoPipelineV2(token, payload);
+      const res = await startAutoPipelineV2(token, { website_url: autoUrl.trim() });
       success("Auto Pipeline Started", res.message);
       // Reload company list to show the newly created one (which will likely not have summary yet)
       await loadCompany();
@@ -245,7 +215,6 @@ export default function CompanyPage() {
       setIsAutoRunning(false);
     }
   }
-
   if (loading) {
     return (
       <div className="space-y-6">
@@ -257,13 +226,11 @@ export default function CompanyPage() {
       </div>
     );
   }
-
   if (!company) {
     return (
       <div className="space-y-8">
         <CompanyNav />
         <PageHeader title="Company Setup" />
-
         <Card className="border-dashed border-primary/30 bg-primary/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -292,7 +259,6 @@ export default function CompanyPage() {
             </p>
           </CardContent>
         </Card>
-
         <EmptyState
           icon={Globe}
           title="Or create manually"
@@ -329,12 +295,12 @@ export default function CompanyPage() {
       </div>
     );
   }
-
   return (
     <div className="space-y-8">
       <CompanyNav />
       <PageHeader
         title="Company Setup"
+        title="Profile Details"
         actions={
           <Button variant="secondary" onClick={handleAnalyze} disabled={!company.website_url || isAnalyzing}>
             {isAnalyzing && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -343,7 +309,6 @@ export default function CompanyPage() {
           </Button>
         }
       />
-
       <Card className="border-dashed border-primary/30 bg-primary/5">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -372,7 +337,6 @@ export default function CompanyPage() {
           </p>
         </CardContent>
       </Card>
-
       <form onSubmit={handleSave}>
         <div className="grid gap-8">
           <Card>
@@ -416,7 +380,6 @@ export default function CompanyPage() {
               </div>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -465,7 +428,6 @@ export default function CompanyPage() {
               </div>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -533,7 +495,6 @@ export default function CompanyPage() {
               </div>
             </CardContent>
           </Card>
-
           {company.extracted_summary && (
             <Card>
               <CardHeader>
@@ -559,7 +520,6 @@ export default function CompanyPage() {
               </CardContent>
             </Card>
           )}
-
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={isSaving}>
               {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
